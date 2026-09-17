@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint, vendor_tip, query_tip %}
+{% block title %}Tracked listings{% endblock %}
+{% block heading %}Tracked listings{% endblock %}
+{% block body %}
+<p class="pagelead">
+  One row per real-world listing, recognised across scrapes by its URL with session/tracking args stripped.
+  {{ hint("A listing missing from its vendor's latest clean run for that query is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it.") }}
+</p>
+
+<form class="toolbar" method="get" action="{{ url_for('ui.tracked_listings') }}">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if args.get('status', 'all') == 'all' }}>All</option>
+      <option value="active" {{ 'selected' if args.get('status') == 'active' }}>Active</option>
+      <option value="inactive" {{ 'selected' if args.get('status') == 'inactive' }}>Ended / sold</option>
+    </select>
+  </label>
+  <label>Query object
+    <select name="query_object_id" onchange="this.form.submit()">
+      <option value="">All query objects</option>
+      {% for q in queries %}<option value="{{ q.id }}" {{ 'selected' if args.get('query_object_id') == q.id }}>{{ q.content or q.id }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Vendor
+    <select name="vendor_id" onchange="this.form.submit()">
+      <option value="">All vendors</option>
+      {% for v in vendors %}<option value="{{ v.identifier }}" {{ 'selected' if args.get('vendor_id') == v.identifier }}>{{ v.name or v.identifier }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Type
+    <select name="listing_type" onchange="this.form.submit()">
+      <option value="">All</option>
+      <option value="auction" {{ 'selected' if args.get('listing_type') == 'auction' }}>Auction</option>
+      <option value="buy_now" {{ 'selected' if args.get('listing_type') == 'buy_now' }}>Buy It Now</option>
+      <option value="unknown" {{ 'selected' if args.get('listing_type') == 'unknown' }}>Unknown</option>
+    </select>
+  </label>
+  <label>Show
+    <select name="show" onchange="this.form.submit()">
+      <option value="visible" {{ 'selected' if args.get('show', 'visible') == 'visible' }}>Visible</option>
+      <option value="hidden" {{ 'selected' if args.get('show') == 'hidden' }}>Hidden</option>
+      <option value="all" {{ 'selected' if args.get('show') == 'all' }}>All</option>
+    </select>
+  </label>
+  <label>Sort
+    <select name="sort" onchange="this.form.submit()">
+      <option value="last_seen" {{ 'selected' if args.get('sort', 'last_seen') == 'last_seen' }}>Recently seen</option>
+      <option value="first_seen" {{ 'selected' if args.get('sort') == 'first_seen' }}>Newest listing</option>
+      <option value="price_desc" {{ 'selected' if args.get('sort') == 'price_desc' }}>Price: high to low</option>
+      <option value="price_asc" {{ 'selected' if args.get('sort') == 'price_asc' }}>Price: low to high</option>
+    </select>
+  </label>
+</form>
+
+<div class="table-wrap"><table>
+  <thead><tr>
+    <th>Listing</th><th>Vendor</th><th>Query object</th><th>Type</th>
+    <th class="num">Price</th><th class="num">Change</th><th class="num">Obs</th><th>Seen</th>
+  </tr></thead>
+  <tbody>
+  {% for t in rows %}
+    <tr {{ 'style=opacity:.6' if t.hidden }}>
+      <td>
+        <a href="{{ url_for('ui.tracked_listing_detail', tracked_id=t.id) }}">{{ t.title or t.canonical_url }}</a>
+        {% if not t.active %}<span class="badge canceled" title="not in the last {{ t.runs_missed }} run(s)">ended</span>{% endif %}
+      </td>
+      <td>{{ vendor_tip(t.vendor_id, vmap) }}</td>
+      <td>{{ query_tip(t.query_object_id, qmap) }}</td>
+      <td>
+        {% if t.listing_type == 'auction' %}<span class="badge auction">auction</span>
+        {% elif t.listing_type == 'buy_now' %}<span class="badge buy_now">buy it now</span>
+        {% else %}<span class="badge unknown">unknown</span>{% endif %}
+      </td>
+      <td class="num tnum">${{ t.last_price | round | int if t.last_price is not none else '—' }}</td>
+      <td class="num tnum">
+        {% if t.price_change_pct is not none and t.price_change_pct != 0 %}
+          <span class="delta {{ 'up' if t.price_change_pct < 0 else 'down' }}">{{ '%+.1f%%' % t.price_change_pct }}</span>
+        {% else %}—{% endif %}
+      </td>
+      <td class="num tnum">{{ t.observations_count }}</td>
+      <td class="muted">{{ t.last_seen_at | reltime if t.last_seen_at else '—' }}</td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="muted">no tracked listings match — they're recorded automatically as jobs report results with a link.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

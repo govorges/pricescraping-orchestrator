@@ -1,0 +1,117 @@
+{% macro selector_row(types, name='', css='', typ='text', required=False, ignore=False) -%}
+<tr class="selrow">
+  <td><input name="sel_name" value="{{ name }}" placeholder="title"></td>
+  <td><input name="sel_css" value="{{ css }}" placeholder=".s-card__title"></td>
+  <td>
+    <select name="sel_type">
+      {% for t in types %}<option value="{{ t }}" {{ 'selected' if t == typ }}>{{ t }}</option>{% endfor %}
+    </select>
+  </td>
+  <td style="text-align:center"><input type="checkbox" name="sel_required" value="{{ name }}" {{ 'checked' if required }}></td>
+  <td style="text-align:center"><input type="checkbox" name="sel_ignore" value="{{ name }}" {{ 'checked' if ignore }}></td>
+  <td><button type="button" class="rowdel" onclick="this.closest('tr').remove()">×</button></td>
+</tr>
+{%- endmacro %}
+
+{% macro vendor_form(types, vendor=None) -%}
+{% set cfg = vendor.config if vendor else {} %}
+{% set meta = cfg.get('metadata', {}) if cfg else {} %}
+{% set is_edit = vendor is not none %}
+<form method="post"
+      action="{{ url_for('ui.update_vendor', identifier=vendor.identifier) if is_edit else url_for('ui.create_vendor') }}">
+  <div class="formgrid">
+    <label>Identifier</label>
+    {% if is_edit %}
+      <div class="mono">{{ vendor.identifier }} <span class="muted">(immutable)</span></div>
+    {% else %}
+      <input name="identifier" required placeholder="usa_ebay" pattern="[a-z0-9_]+">
+    {% endif %}
+
+    <label>Display name {{ '' }}</label>
+    <input name="name" value="{{ vendor.name if is_edit else '' }}" placeholder="eBay US">
+
+    <label>Enabled</label>
+    <input type="checkbox" name="enabled" {{ 'checked' if (vendor.enabled if is_edit else true) }}>
+
+    <label>Homepage</label>
+    <input name="homepage" value="{{ meta.get('homepage', '') }}" placeholder="https://www.ebay.com">
+
+    <label>Brand colour</label>
+    <input name="color" value="{{ meta.get('color', '') }}" placeholder="#e53238">
+
+    <label>Search URL — start
+      <span class="subid">url.start · the query text is appended here</span></label>
+    <input name="url_start" value="{{ cfg.get('url', {}).get('start', '') }}"
+           placeholder="https://www.ebay.com/sch/i.html?_nkw=" required>
+
+    <label>Search URL — end
+      <span class="subid">url.end · appended after the query (sort params etc.)</span></label>
+    <input name="url_end" value="{{ cfg.get('url', {}).get('end', '') }}" placeholder="&_sop=15">
+
+    <label>Preload URL
+      <span class="subid">optional · visited first to pick up cookies / consent</span></label>
+    <input name="preload" value="{{ cfg.get('preload') or '' }}" placeholder="(none)">
+
+    <label>Strip phrases
+      <span class="subid">one per line · removed from every extracted text field</span></label>
+    <textarea name="strip_phrases" style="min-height:4rem">{{ (cfg.get('strip_phrases') or []) | join('\n') }}</textarea>
+
+    <label>Challenge markers
+      <span class="subid">one per line · page text that means "blocked, retry"</span></label>
+    <textarea name="challenge_markers" style="min-height:4rem">{{ (cfg.get('challenge_markers') or []) | join('\n') }}</textarea>
+
+    <label>Listings selector
+      <span class="subid">selectors.listings · one CSS match per listing (required)</span></label>
+    <input name="listings" value="{{ cfg.get('selectors', {}).get('listings', '') }}"
+           placeholder="ul.srp-results li.s-item" required>
+  </div>
+
+  <h3>Field selectors {{ '' }}</h3>
+  <p class="muted">One row per field extracted from each listing. A listing with no resolved
+     <span class="mono">price</span> is always dropped.</p>
+  <table class="selbuilder">
+    <thead><tr>
+      <th>Field name</th><th>CSS selector</th><th>Type</th>
+      <th>Required<span class="subid">drop listing if missing</span></th>
+      <th>Ignore filter<span class="subid">keep out of Include/Exclude match</span></th>
+      <th></th>
+    </tr></thead>
+    <tbody class="selbody">
+      {% set fields = [] %}
+      {% for k, v in (cfg.get('selectors', {}) if cfg else {}).items() if k != 'listings' %}
+        {{ selector_row(types, k, v.get('css_selector', ''), v.get('type', 'text'),
+                        v.get('required', False), v.get('ignore_filter', False)) }}
+      {% else %}
+        {{ selector_row(types, 'title', '', 'text', true, false) }}
+        {{ selector_row(types, 'link', '', 'link', true, false) }}
+        {{ selector_row(types, 'price', '', 'price', true, false) }}
+      {% endfor %}
+    </tbody>
+  </table>
+  <template class="selrow-tpl">{{ selector_row(types) }}</template>
+  <p><button type="button" class="btn ghost sm" onclick="vendorFormAddRow(this)">+ Add field</button></p>
+
+  <details>
+    <summary>Selector type reference</summary>
+    <dl class="dl" style="margin-top:.5rem">
+      <dt>text</dt><dd>element text</dd>
+      <dt>link</dt><dd><code>href</code>, made absolute against the search URL</dd>
+      <dt>image</dt><dd><code>src</code>, made absolute</dd>
+      <dt>price</dt><dd>parsed number → becomes the listing's price (last <code>price</code> row wins)</dd>
+      <dt>additive_price</dt><dd>parsed number <em>added</em> to the price (e.g. shipping)</dd>
+      <dt>misc_price</dt><dd>parsed number kept in <code>extra</code> only, not added</dd>
+    </dl>
+  </details>
+
+  <details>
+    <summary>Advanced — paste raw config JSON (overrides the fields above)</summary>
+    <textarea name="config_json" spellcheck="false"
+              placeholder='{ "metadata": {...}, "url": {"start": "..."}, "selectors": { "listings": "..." } }'></textarea>
+    {% if is_edit %}<p class="muted mono" style="white-space:pre-wrap">{{ cfg | tojson(indent=2) }}</p>{% endif %}
+  </details>
+
+  <div class="formfoot">
+    <button type="submit" class="btn">{{ 'Save changes' if is_edit else 'Create vendor' }}</button>
+  </div>
+</form>
+{%- endmacro %}

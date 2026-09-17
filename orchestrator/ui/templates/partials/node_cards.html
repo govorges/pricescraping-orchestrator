@@ -1,0 +1,12 @@
+{% from "_macros.html" import node_capacity_card %}
+<div class="nodegrid" id="nodes-grid"
+     hx-get="{{ url_for('ui.partial_node_cards') }}" hx-trigger="every 8s" hx-swap="outerHTML">
+  {% for n in nodes %}{{ node_capacity_card(n, compact=compact|default(false), jobs_per_min=jobs_per_min.get(n.id)) }}
+  {% else %}
+  <div class="node add" style="grid-column: 1 / -1">
+    <span class="plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></span>
+    <b>No worker nodes</b>
+    <span>Provision one to start draining the queue.</span>
+  </div>
+  {% endfor %}
+</div>

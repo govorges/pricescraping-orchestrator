@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Overview{% endblock %}
+{% block action %}
+  <a class="btn" href="{{ url_for('ui.queries') }}">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New query object</span>
+  </a>
+{% endblock %}
+
+{% block body %}
+<div>
+  <div class="eyebrow">Vital signs <span class="count">· live</span></div>
+  {% include "partials/queue.html" %}
+</div>
+
+<div class="row split">
+  <div class="stack">
+    <div class="panel lifted">
+      <header>
+        <h2>Median price over time</h2>
+        <div class="right chart-controls">
+          <input type="search" id="chart-qo-search" class="chart-qo-search" placeholder="Filter…" aria-label="Filter query objects">
+          <select id="chart-qo" aria-label="Query object or category">
+            <option value="__all__">All query objects</option>
+            {% if categories %}
+            <optgroup label="Categories">
+              {% for c in categories %}<option value="cat:{{ c.id }}">{{ c.name or c.id }} (category)</option>{% endfor %}
+            </optgroup>
+            {% endif %}
+            {% for cat, opts in qo_options | groupby('category') %}
+            <optgroup label="{{ cat }}">
+              {% for o in opts %}<option value="{{ o.id }}">{{ o.name }}</option>{% endfor %}
+            </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+      </header>
+      <svg class="chart" id="trendChart" viewBox="0 0 760 260" role="img" aria-label="Median price trend"></svg>
+      <div class="chart-empty" id="trendEmpty" hidden>No price observations yet — run a schedule to populate this.</div>
+      <p class="legend" style="margin-top:8px"><span><i style="background:var(--accent)"></i>observed median price</span></p>
+    </div>
+    <div class="panel">
+      <header><h2>Recent jobs</h2><span class="right"><a href="{{ url_for('ui.jobs') }}">All jobs →</a></span></header>
+      {% include "partials/job_feed.html" %}
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="panel">
+      <header><h2>Worker capacity</h2><span class="sub">running / desired</span>
+        <span class="right"><a href="{{ url_for('ui.nodes') }}">Manage →</a></span></header>
+      {% include "partials/node_cards.html" %}
+      <div class="capsum">
+        <span>Consumers on <span class="mono">workers</span></span><b class="tnum">{{ vitals.consumers }}</b>
+        <span>Autoscale</span><b>{{ 'on' if config['SETTINGS'].autoscale_enabled else 'off' }} · target queue &lt; {{ config['SETTINGS'].autoscale_per_replica_target }}</b>
+      </div>
+    </div>
+    <div class="panel">
+      <header><h2>Next scheduled runs</h2>
+        <span class="sub">{{ upcoming | length }} enabled</span></header>
+      <ul class="runs">
+        {% for s in upcoming %}
+        <li>
+          <span class="q"><b>{{ s.query_object.content if s.query_object else s.query_object_id }}</b>
+            <span>· {{ s.vendor.name if s.vendor else s.vendor_id }}</span></span>
+          <span class="eta">{{ s.next_run_at | reltime if s.next_run_at else 'not scheduled' }}</span>
+          <span class="cadence mono">{{ s.cron }}</span>
+          <form class="inline" method="post" action="{{ url_for('ui.run_schedule', sid=s.id) }}">
+            <button type="submit" class="ghost sm">Run</button>
+          </form>
+        </li>
+        {% else %}
+        <li><span class="q muted">no enabled schedules — <a href="{{ url_for('ui.schedules') }}">add one</a></span></li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div>
+  <div class="eyebrow">Needs attention <span class="count">· {{ attention | length }}</span></div>
+  <div class="attention">
+    {% for a in attention %}
+    <div class="alert {{ 'crit' if a.level == 'crit' }}">
+      <svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+      <p>{{ a.text }}</p>
+      {% if a.href %}<a class="btn ghost sm" href="{{ url_for('ui.' + a.href) }}">Review</a>{% else %}<span></span>{% endif %}
+    </div>
+    {% else %}
+    <div class="ok-note">All clear — workers healthy, queue draining, no dead-letter.</div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var svg = document.getElementById("trendChart");
+  var empty = document.getElementById("trendEmpty");
+  var sel = document.getElementById("chart-qo");
+  var search = document.getElementById("chart-qo-search");
+  var QO_NAMES = {{ qo_names | tojson }};
+  var current = [];
+
+  function fmtDate(iso) {
+    var d = new Date(iso); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+  function dayKey(iso) { return iso.slice(0, 10); }
+  function median(nums) {
+    var a = nums.slice().sort(function (x, y) { return x - y; });
+    var n = a.length;
+    if (!n) return null;
+    var mid = Math.floor(n / 2);
+    return n % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2;
+  }
+  function draw() {
+    if (!current.length) { svg.hidden = true; empty.hidden = false; return; }
+    svg.hidden = false; empty.hidden = true;
+    var qo = sel.value;
+    var series, xs;
+    if (qo === "__all__" || qo.indexOf("cat:") === 0) {
+      // One connected line: the median of every matching query's median
+      // price, bucketed by day. Plotting one raw line per query object on a
+      // shared timestamp axis (the old behaviour) left almost every point
+      // isolated -- different queries/vendors are scraped at different exact
+      // instants, so barely any two rows ever shared an x value and most
+      // "lines" were single dots.
+      var byDay = {};
+      current.forEach(function (r) {
+        if (r.price_median == null) return;
+        var k = dayKey(r.observed_at);
+        (byDay[k] = byDay[k] || []).push(r.price_median);
+      });
+      xs = Object.keys(byDay).sort();
+      var label = qo === "__all__" ? "median across all queries"
+        : "median across " + (sel.options[sel.selectedIndex].textContent.replace(" (category)", ""));
+      series = [{ name: label, points: xs.map(function (k) { return median(byDay[k]); }) }];
+    } else {
+      var rows = current.filter(function (r) { return r.query_object_id === qo; });
+      xs = rows.map(function (r) { return r.observed_at; });
+      series = [{ name: QO_NAMES[qo] || qo,
+        points: rows.map(function (r) { return r.price_median; }) }];
+    }
+    if (!series.length || !series[0].points.length) { svg.hidden = true; empty.hidden = false; return; }
+    var labels = xs.length > 5
+      ? [0, 0.25, 0.5, 0.75, 1].map(function (f) { return fmtDate(xs[Math.round(f * (xs.length - 1))]); })
+      : xs.map(fmtDate);
+    window.registerChart(svg, function () { window.drawLineChart(svg, series, { xlabels: labels }); });
+  }
+  function load() {
+    var qo = sel.value;
+    var url = "/api/v1/observations?limit=4000";
+    if (qo.indexOf("cat:") === 0) url += "&category_id=" + encodeURIComponent(qo.slice(4));
+    else if (qo !== "__all__") url += "&query_object_id=" + encodeURIComponent(qo);
+    fetch(url).then(function (r) { return r.json(); }).then(function (rows) {
+      current = Array.isArray(rows) ? rows : [];
+      draw();
+    }).catch(function () { current = []; draw(); });
+  }
+  sel.addEventListener("change", load);
+  if (search) {
+    search.addEventListener("input", function () {
+      var term = search.value.trim().toLowerCase();
+      Array.prototype.forEach.call(sel.options, function (opt) {
+        if (opt.value === "__all__") return;
+        opt.hidden = term !== "" && opt.textContent.toLowerCase().indexOf(term) === -1;
+      });
+      Array.prototype.forEach.call(sel.querySelectorAll("optgroup"), function (g) {
+        g.hidden = !Array.prototype.some.call(g.children, function (o) { return !o.hidden; });
+      });
+    });
+  }
+  load();
+  setInterval(load, 30000);
+});
+</script>
+{% endblock %}

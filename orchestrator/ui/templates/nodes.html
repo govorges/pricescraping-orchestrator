@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Worker nodes{% endblock %}
+{% block action %}
+  <button class="btn" type="button" data-slideover="provision">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>Provision node</span>
+  </button>
+{% endblock %}
+
+{% block body %}
+<p class="envline">
+  Every replica joins consumer group <span class="kv"><b>{{ settings.consumer_group }}</b></span>
+  on <span class="kv"><b>{{ settings.job_stream }}</b></span>
+  and reports to <span class="kv">ORCHESTRATOR_BASE_URL <b>{{ settings.worker_env_orchestrator_base_url }}</b></span>
+</p>
+
+<div class="eyebrow">Capacity <span class="count">· {{ nodes | length }} node(s)</span></div>
+{% include "partials/node_cards.html" %}
+
+<div class="note {{ 'warn' if settings.provider == 'salad' }}">
+  {% if settings.provider == 'salad' %}
+    On SaladCloud each running replica is billed until you scale it back down — a node left at N replicas costs
+    N × the instance rate per hour. Scale to 0 or delete when idle.
+  {% else %}
+    Locally each replica is a Docker container using this machine's CPU/RAM (restart policy
+    <span class="mono">unless-stopped</span>) until you scale down or delete the node.
+  {% endif %}
+</div>
+
+<div class="panel" id="deadletter">
+  <header>
+    <h2>Dead-letter</h2>
+    <span class="sub">jobs a worker permanently gave up on {{ hint("Malformed payload, or exceeded MAX_ATTEMPTS reclaim cycles without ever delivering a result. The matching job row is marked 'dead'.") }}</span>
+    <span class="right"><span class="pill {{ 'pill--crit' if deadletter else '' }}">{{ deadletter | length }} entr{{ 'y' if deadletter | length == 1 else 'ies' }}</span></span>
+  </header>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Stream ID</th><th>Job</th><th>Reason</th></tr></thead>
+    <tbody>
+      {% for d in deadletter %}
+      <tr>
+        <td class="mono">{{ d.id }}</td>
+        <td class="mono">{% if d.job_id %}<a href="{{ url_for('ui.job_detail', job_id=d.job_id) }}">{{ d.job_id[:8] }}</a>{% else %}—{% endif %}</td>
+        <td>{{ d.reason }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">empty — nothing has been dead-lettered</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
+
+{% block slideovers %}
+<aside class="slideover" id="provision" hidden aria-label="Provision a worker node">
+  <form method="post" action="{{ url_for('ui.create_node') }}" style="display:flex;flex-direction:column;height:100%"
+        onsubmit="return confirm('Start ' + (this.replicas.value || '1') + ' replica(s) of ' + (this.image.value || '{{ settings.worker_image }}') + ' via the {{ settings.provider }} provider?{% if settings.provider == 'salad' %} This begins billing immediately.{% endif %}')">
+    <div class="slideover-head">
+      <div class="t">
+        <h2>Provision node</h2>
+        <p>a new, independently scalable unit of worker capacity via <b>{{ settings.provider }}</b></p>
+      </div>
+      <button type="button" class="icon-btn" data-slideover-close aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="slideover-body">
+      <div class="field"><label>Name <span class="opt">— optional, auto if blank</span></label>
+        <input name="name" placeholder="(auto)"></div>
+      <div class="field"><label>Image</label>
+        <input name="image" value="{{ settings.worker_image }}" class="mono"></div>
+      <div class="field"><label>Replicas</label>
+        <input name="replicas" type="number" min="0" value="1">
+        <span class="help">Each replica is one more consumer draining the queue.</span></div>
+      {% if settings.provider == 'salad' %}
+      <div class="field"><label>CPU (vCPU)</label><input name="cpu" type="number" min="1" placeholder="1"></div>
+      <div class="field"><label>Memory (MB)</label><input name="memory_mb" type="number" placeholder="2048"></div>
+      <div class="field"><label>GPU class <span class="opt">— optional</span></label><input name="gpu_class" placeholder="(none)"></div>
+      {% endif %}
+      <div class="preview">
+        <p>Environment every replica inherits</p>
+        {% for k, v in worker_env.items() %}<div class="kv"><span class="mono">{{ k }}</span><span class="mono">{{ v }}</span></div>{% endfor %}
+      </div>
+    </div>
+    <div class="slideover-foot">
+      <button type="button" class="btn ghost" data-slideover-close>Cancel</button>
+      <button type="submit" class="btn">Provision</button>
+    </div>
+  </form>
+</aside>
+{% endblock %}

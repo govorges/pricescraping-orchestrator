@@ -1,0 +1,58 @@
+# Local dev / demo stack for the orchestrator.
+#
+#   docker compose up -d --build
+#   docker compose exec orchestrator python scripts/seed_db.py
+#   open http://localhost:8000
+#
+# The `worker` service is built from the sibling ../pricescraping-worker checkout
+# and is a baseline consumer; the orchestrator can start/scale more via the
+# mounted Docker socket (PROVIDER=local).
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  orchestrator:
+    build: .
+    # Seed only on a genuinely fresh volume (no orchestrator.db yet) — seed_db.py
+    # unconditionally upserts, so running it on every restart would silently
+    # overwrite any vendor/category/query/schedule you've since edited in the
+    # panel back to the example values.
+    command: >
+      sh -c "FRESH=1; [ -f /data/orchestrator.db ] && FRESH=0;
+             alembic upgrade head &&
+             if [ \"$$FRESH\" = 1 ]; then python scripts/seed_db.py config/seed.example.json; fi &&
+             python -m orchestrator --scheduler"
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////data/orchestrator.db
+      REDIS_URL: redis://redis:6379/0
+      PROVIDER: local
+      WORKER_IMAGE: pricescraping-worker:latest
+      WORKER_NETWORK: pricescraping-orchestrator_default
+      WORKER_ENV_REDIS_URL: redis://redis:6379/0
+      WORKER_ENV_ORCHESTRATOR_BASE_URL: http://orchestrator:8000
+    volumes:
+      - ./_local:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: ["8000:8000"]
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: ../pricescraping-worker
+    env_file: ../pricescraping-worker/.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ORCHESTRATOR_BASE_URL: http://orchestrator:8000
+      ORCHESTRATOR_TOKEN: dev-token
+      INGEST_PATH: /api/v1/ingest/scrape-results
+    depends_on:
+      redis:
+        condition: service_healthy

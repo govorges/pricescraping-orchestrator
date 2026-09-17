@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% from "_macros.html" import job_table, sort_select, hint %}
+{% block title %}Jobs{% endblock %}
+{% block body %}
+<h1>Jobs</h1>
+
+<details class="panel">
+  <summary>What the statuses mean</summary>
+  <dl class="statuslegend">
+    <div>
+      <dt><span class="badge queued">queued</span></dt>
+      <dd>Assembled and <code>XADD</code>-ed to the Redis stream. It stays here until a worker in the
+          <code>workers</code> consumer group picks it up. <b>If no worker is running it will sit here forever</b> —
+          the orchestrator does not time queued jobs out. Use <em>Cancel</em> / <em>Purge queue</em> below.</dd>
+    </div>
+    <div>
+      <dt><span class="badge ok">ok</span> / <span class="badge partial">partial</span> / <span class="badge error">error</span></dt>
+      <dd>A worker finished the scrape and POSTed a result to the ingest endpoint. <code>partial</code> = some
+          selectors failed or a challenge page was hit but listings were still extracted; <code>error</code> = the
+          scrape or delivery failed.</dd>
+    </div>
+    <div>
+      <dt><span class="badge dead">dead</span></dt>
+      <dd>A worker <b>gave up</b> on the job: its payload was malformed, or it exceeded <code>MAX_ATTEMPTS</code>
+          reclaim cycles (a worker kept claiming it and never delivered a result). The worker moves it to the
+          <code>scrape.jobs.deadletter</code> stream and the reconcile loop flips this row to <code>dead</code>.
+          This is <b>not</b> set just because a job is slow or stuck queued.</dd>
+    </div>
+    <div>
+      <dt><span class="badge canceled">canceled</span></dt>
+      <dd>You removed it from the queue via <em>Cancel</em> or <em>Purge queue</em>.</dd>
+    </div>
+  </dl>
+</details>
+
+<div class="tabs">
+  <a href="{{ url_for('ui.jobs') }}" class="{{ 'active' if not args.get('status') }}">all</a>
+  {% for s in ['queued', 'ok', 'partial', 'error', 'dead', 'canceled'] %}
+    <a href="{{ url_for('ui.jobs', status=s) }}" class="{{ 'active' if args.get('status') == s }}">{{ s }} ({{ counts.get(s, 0) }})</a>
+  {% endfor %}
+</div>
+
+<form class="toolbar" method="get" action="{{ url_for('ui.jobs') }}">
+  {% if args.get('status') %}<input type="hidden" name="status" value="{{ args.get('status') }}">{% endif %}
+  <label>Vendor
+    <select name="vendor_id" onchange="this.form.submit()">
+      <option value="">All vendors</option>
+      {% for v in vendors %}<option value="{{ v.identifier }}" {{ 'selected' if args.get('vendor_id') == v.identifier }}>{{ v.name or v.identifier }} ({{ v.identifier }})</option>{% endfor %}
+    </select>
+  </label>
+  <label>Query name
+    <span class="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+      <input type="text" name="q" value="{{ args.get('q', '') }}" placeholder="e.g. RTX 5090" aria-label="Filter by query name">
+    </span>
+  </label>
+  {{ sort_select(args.get('sort', ''), auto=True) }}
+  <button type="button" class="btn danger toolbar-end"
+          onclick="if (confirm('Purge every queued job from the stream and mark those rows canceled?\\n\\nRunning/finished jobs are untouched. Workers already mid-scrape will still deliver their result.')) { document.getElementById('purge-form').submit(); }">
+    Purge queue {{ hint("XDELs all undelivered entries from scrape.jobs and marks queued/running job rows canceled. Use this to clear a backlog you enqueued by mistake or that no worker will ever process.") }}
+  </button>
+</form>
+<form id="purge-form" method="post" action="{{ url_for('ui.purge_queue_view') }}" hidden></form>
+
+<div class="scroll-y">{{ job_table(jobs, vmap, qmap) }}</div>
+{% endblock %}

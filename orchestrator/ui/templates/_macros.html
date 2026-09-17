@@ -1,0 +1,189 @@
+{# a category's effective-exclude list can run into the hundreds -- never dump
+   it flat into a line of prose #}
+{% macro phrase_list(phrases, limit=12) -%}
+{%- if not phrases -%}—
+{%- elif phrases | length > limit -%}
+{{ phrases[:limit] | join(' · ') }} <span class="muted">+{{ phrases | length - limit }} more</span>
+{%- else -%}
+{{ phrases | join(' · ') }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro hint(text) -%}
+<span class="hint" title="{{ text }}" aria-label="{{ text }}">?</span>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+<span class="badge {{ status }}">{{ status }}</span>
+{%- endmacro %}
+
+{% macro name_sub(display, internal) -%}
+{{ display or internal }}<span class="subid">{{ internal }}</span>
+{%- endmacro %}
+
+{# display name only; internal id shown on hover — for tight spots like pills/tags #}
+{% macro label_tip(display, internal) -%}
+<span title="{{ internal }}">{{ display or internal }}</span>
+{%- endmacro %}
+
+{% macro vendor_tip(vid, vmap) -%}
+{{ label_tip(vmap[vid].name if vid in vmap and vmap[vid].name else vid, vid) }}
+{%- endmacro %}
+
+{% macro query_tip(qid, qmap) -%}
+{{ label_tip(qmap[qid].content if qid in qmap and qmap[qid].content else qid, qid) }}
+{%- endmacro %}
+
+{% macro vendor_label(vid, vmap) -%}
+{{ name_sub(vmap[vid].name if vid in vmap else None, vid) }}
+{%- endmacro %}
+
+{% macro query_label(qid, qmap) -%}
+{{ name_sub(qmap[qid].content if qid in qmap else None, qid) }}
+{%- endmacro %}
+
+{%- macro _status_dot(status) -%}
+{%- if status == 'ok' -%}ok{%- elif status in ('partial', 'queued', 'running') -%}warn{%- elif status in ('error', 'dead') -%}crit{%- else -%}idle{%- endif -%}
+{%- endmacro -%}
+
+{# ---- compact activity feed for the Overview ---- #}
+{% macro job_feed(jobs, vmap, qmap) -%}
+<ul class="feed">
+{% for j in jobs %}
+  <li>
+    <i class="dot {{ _status_dot(j.status) }}"></i>
+    <span class="who">
+      <a href="{{ url_for('ui.job_detail', job_id=j.job_id) }}"><b>{{ vmap[j.vendor_id].name if j.vendor_id in vmap else j.vendor_id }}</b></a>
+      <span>· {{ qmap[j.query_object_id].content if j.query_object_id in qmap else j.query_object_id }}</span>
+      <div class="line2">
+        {%- if j.status == 'dead' %}dead — {{ j.error_type or 'max_attempts_exceeded' }}
+        {%- elif j.error_type %}{{ j.status }} — {{ j.error_type }}
+        {%- elif j.duration_ms is not none %}{{ j.status }} · {{ '%.1f' % (j.duration_ms / 1000) }}s
+        {%- else %}{{ j.status }}{% endif -%}
+      </div>
+    </span>
+    <span class="when">{{ j.result_at | reltime if j.result_at else j.created_at | reltime }}</span>
+  </li>
+{% else %}
+  <li><span class="who muted">no jobs yet</span></li>
+{% endfor %}
+</ul>
+{%- endmacro %}
+
+{% macro job_table(jobs, vmap, qmap, show_cancel=True) -%}
+<div class="table-wrap"><table>
+  <thead><tr>
+    <th>Job <span class="subid">job_id</span></th>
+    <th>Vendor</th>
+    <th>Query object</th>
+    <th>Status</th>
+    <th class="num">Duration <span class="subid">ms</span></th>
+    <th>Created <span class="subid">UTC</span></th>
+    {% if show_cancel %}<th></th>{% endif %}
+  </tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    <tr>
+      <td><a href="{{ url_for('ui.job_detail', job_id=j.job_id) }}" class="mono">{{ j.job_id[:8] }}</a></td>
+      <td>{{ vendor_label(j.vendor_id, vmap) }}</td>
+      <td>{{ query_label(j.query_object_id, qmap) }}</td>
+      <td>{{ status_badge(j.status) }}</td>
+      <td class="num">{{ j.duration_ms if j.duration_ms is not none else '—' }}</td>
+      <td class="muted">{{ j.created_at.strftime('%Y-%m-%d %H:%M:%S') if j.created_at else '' }}</td>
+      {% if show_cancel %}
+      <td>
+        {% if j.status in ('queued', 'running') %}
+        <form class="inline" method="post" action="{{ url_for('ui.cancel_job', job_id=j.job_id) }}"
+              onsubmit="return confirm('Cancel job {{ j.job_id[:8] }} and remove it from the queue?')">
+          <button class="danger sm" type="submit">Cancel</button>
+        </form>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+  {% else %}
+    <tr><td colspan="{{ 7 if show_cancel else 6 }}" class="muted">no jobs match</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{%- endmacro %}
+
+{% macro sort_select(current, auto=False) -%}
+<label>Sort
+  <select name="sort"{% if auto %} onchange="this.form.submit()"{% endif %}>
+    <option value="created_desc" {{ 'selected' if current in ('', 'created_desc') }}>Newest first</option>
+    <option value="created_asc"  {{ 'selected' if current == 'created_asc' }}>Oldest first</option>
+    <option value="status"       {{ 'selected' if current == 'status' }}>Status</option>
+    <option value="vendor"       {{ 'selected' if current == 'vendor' }}>Vendor</option>
+    <option value="query"        {{ 'selected' if current == 'query' }}>Query object</option>
+    <option value="duration_desc" {{ 'selected' if current == 'duration_desc' }}>Slowest first</option>
+  </select>
+</label>
+{%- endmacro %}
+
+{% macro node_rows(nodes) -%}
+{% for n in nodes %}
+<tr>
+  <td><span class="mono">{{ n.id }}</span></td>
+  <td><span class="badge {{ n.provider }}">{{ n.provider }}</span></td>
+  <td>{{ status_badge(n.status) }}</td>
+  <td class="num">{{ n.replicas_running }} / {{ n.replicas_desired }}</td>
+  <td class="mono muted">{{ n.image or '—' }}</td>
+  <td class="muted">{{ n.last_seen_at.strftime('%H:%M:%S') if n.last_seen_at else '—' }}</td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="muted">no nodes</td></tr>
+{% endfor %}
+{%- endmacro %}
+
+{# ---- capacity view of a worker node ---- #}
+{% macro node_capacity_card(n, compact=False, jobs_per_min=None) -%}
+{% set desired = n.replicas_desired or 0 %}
+{% set running = n.replicas_running or 0 %}
+{% set pct = (running / desired * 100) if desired else (100 if running else 0) %}
+{% set scaling = running != desired %}
+<div class="node{{ ' scaling' if scaling }}">
+  <div class="nhead">
+    <span class="mono">{{ n.id }}</span>
+    <span class="badge {{ n.provider }}">{{ n.provider }}</span>
+    <span class="pill {{ 'pill--warn' if scaling else 'pill--ok' }}"><i class="dot"></i>{{ n.status }}</span>
+  </div>
+  <div class="metrics">
+    <div class="metric"><b class="tnum">{{ running }} / {{ desired }}</b><span>replicas up</span></div>
+    <div class="metric"><b class="tnum">{{ jobs_per_min if jobs_per_min is not none else '—' }}</b><span>jobs / min</span></div>
+  </div>
+  <div class="cap">
+    <div class="cap-fill{{ ' warn' if scaling }}" style="width: {{ pct if pct <= 100 else 100 }}%"></div>
+    <div class="cap-target" style="left: 100%"></div>
+  </div>
+  {% if not compact %}
+  <div class="nfoot">
+    <span class="mono">{{ n.image or 'worker:latest' }}</span>
+    <span class="right">
+      <form class="nscale" method="post" action="{{ url_for('ui.scale_node', node_id=n.id) }}"
+            onsubmit="return confirm('Set node {{ n.id }} to ' + this.replicas.value + ' replicas (currently {{ desired }})?\n\n{{ 'SaladCloud bills per running replica.' if n.provider == 'salad' else 'Each replica is a local worker container.' }}')">
+        <span class="stepper">
+          <button type="button" onclick="nodeStep(this,-1)" aria-label="Fewer replicas">&minus;</button>
+          <input type="number" name="replicas" min="0" value="{{ desired }}" aria-label="Target replicas">
+          <button type="button" onclick="nodeStep(this,1)" aria-label="More replicas">+</button>
+        </span>
+        <button type="submit" class="btn ghost sm">Scale</button>
+      </form>
+      <form class="inline" method="post" action="{{ url_for('ui.delete_node', node_id=n.id) }}"
+            onsubmit="return confirm('Permanently delete node {{ n.id }} and stop all {{ running }} running worker {{ 'container(s)' if n.provider == 'local' else 'replica(s)' }}?')">
+        <button type="submit" class="btn danger sm">Delete</button>
+      </form>
+    </span>
+  </div>
+  {% if n.meta %}
+  <details><summary class="muted">meta &amp; timestamps</summary>
+    <dl class="dl">
+      <dt>created</dt><dd>{{ n.created_at }}</dd>
+      <dt>last seen</dt><dd>{{ n.last_seen_at }}</dd>
+      <dt>meta</dt><dd><pre class="code">{{ n.meta | tojson(indent=2) }}</pre></dd>
+    </dl>
+  </details>
+  {% endif %}
+  {% endif %}
+</div>
+{%- endmacro %}

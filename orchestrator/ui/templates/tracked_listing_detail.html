@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint, vendor_tip, query_tip %}
+{% block title %}{{ t.title or 'Tracked listing' }}{% endblock %}
+{% block heading %}Listing detail{% endblock %}
+{% block action %}
+  <a class="btn ghost" href="{{ url_for('ui.tracked_listings') }}">← All tracked listings</a>
+{% endblock %}
+
+{% block body %}
+<div class="detail-head">
+  <div class="title">
+    <h2>{{ t.title or t.canonical_url }}</h2>
+    {% if t.listing_type == 'auction' %}<span class="badge auction">auction</span>
+    {% elif t.listing_type == 'buy_now' %}<span class="badge buy_now">buy it now</span>
+    {% else %}<span class="badge unknown">type unknown</span>{% endif %}
+    <span class="tag">{{ vendor_tip(t.vendor_id, vmap) }}</span>
+    <span class="tag tag--cat">{{ query_tip(t.query_object_id, qmap) }}</span>
+    {% if t.link %}<a class="btn ghost sm" style="margin-left:auto" href="{{ t.link }}" target="_blank" rel="noopener">Open listing ↗</a>{% endif %}
+  </div>
+  <div class="url">canonical · <b>{{ t.canonical_url }}</b>
+    <span class="muted">{{ hint("Session and tracking query args are stripped — this is the identity key used to recognise the listing across scrapes.") }}</span></div>
+  <div class="detail-stats">
+    <div class="s"><span class="k">Current price</span><span class="v tnum">${{ t.last_price | round | int if t.last_price is not none else '—' }}</span></div>
+    <div class="s"><span class="k">First seen</span><span class="v tnum">${{ t.first_price | round | int if t.first_price is not none else '—' }}</span></div>
+    <div class="s"><span class="k">Change <span class="subid">since first seen</span></span>
+      <span class="v tnum {{ 'up' if t.price_change_pct and t.price_change_pct < 0 else ('down' if t.price_change_pct and t.price_change_pct > 0 else '') }}">
+        {{ ('%+.1f%%' % t.price_change_pct) if t.price_change_pct is not none else '—' }}</span></div>
+    <div class="s"><span class="k">Observations</span><span class="v tnum">{{ t.observations_count }}</span></div>
+    <div class="s"><span class="k">Tracked since</span><span class="v" style="font-size:.95rem">{{ t.first_seen_at.strftime('%b %d') if t.first_seen_at else '—' }}</span></div>
+  </div>
+</div>
+
+<div class="panel lifted">
+  <header>
+    <h2>Price over time</h2>
+    <span class="sub">{{ t.observations_count }} observation(s)</span>
+    <span class="right legend">
+      <span><i style="background:var(--accent)"></i>observed price</span>
+      {% if t.first_price is not none %}<span><i style="background:var(--ink-muted)"></i>first seen ${{ t.first_price | round | int }}</span>{% endif %}
+    </span>
+  </header>
+  <svg class="chart" id="tl-chart" viewBox="0 0 760 230" role="img" aria-label="Price of this listing over time"></svg>
+  <div class="chart-empty" id="tl-empty" hidden>Only one observation so far — the trend appears after the next scrape.</div>
+</div>
+
+<div class="panel">
+  <header>
+    <h2>Observation history</h2>
+    <span class="sub">newest first · $ delta and % from the previous run</span>
+  </header>
+  {% set pts = t.price_points | list %}
+  <ul class="obs-list">
+    {% for p in pts | reverse %}
+      {% set idx = pts | length - 1 - loop.index0 %}
+      {% set prev = pts[idx - 1] if idx > 0 else None %}
+      {% set diff = (p.price - prev.price) if prev else None %}
+      {% set title_changed = prev and (p.title or '') != (prev.title or '') and p.title %}
+      <li>
+        <time>{{ p.observed_at.strftime('%b %d') if p.observed_at else '' }}
+          <span>{{ p.observed_at.strftime('%H:%M') if p.observed_at else '' }}</span></time>
+        <span class="obs-price tnum">${{ p.price | round | int }}</span>
+        <span class="obs-delta {{ 'up' if diff and diff < 0 else ('down' if diff and diff > 0 else 'flat') }}">
+          {%- if diff and diff != 0 -%}
+            {{ '%+d' % (diff | round | int) }}
+            <small>{{ '%+.1f%%' % (diff / prev.price * 100) }}</small>
+          {%- elif idx == 0 -%}first seen
+          {%- else -%}no change{%- endif -%}
+        </span>
+        {% if p.job_id %}<a class="obs-job mono" href="{{ url_for('ui.job_detail', job_id=p.job_id) }}">{{ p.job_id[:8] }}</a>{% else %}<span></span>{% endif %}
+        {% if title_changed %}<span class="obs-titlechange">↳ retitled “{{ p.title }}”</span>{% endif %}
+      </li>
+    {% else %}
+      <li class="muted">no history yet</li>
+    {% endfor %}
+  </ul>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var history = {{ history | tojson }};
+  var svg = document.getElementById("tl-chart");
+  var empty = document.getElementById("tl-empty");
+  if (history.length < 2) { svg.hidden = true; empty.hidden = false; return; }
+  var pts = history.map(function (h) { return h.price; });
+  var labels = history.map(function (h) {
+    return new Date(h.t).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  });
+  if (labels.length > 5) {
+    labels = [0, 0.25, 0.5, 0.75, 1].map(function (f) {
+      return new Date(history[Math.round(f * (history.length - 1))].t)
+        .toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    });
+  }
+  window.registerChart(svg, function () {
+    window.drawLineChart(svg, [{ name: "price", points: pts }],
+      { xlabels: labels, ref: {{ t.first_price | tojson }}, refLabel: "first seen" });
+  });
+});
+</script>
+{% endblock %}

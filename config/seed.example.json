@@ -1,0 +1,64 @@
+{
+  "vendors": {
+    "usa_ebay": {
+      "metadata": { "name": "eBay US", "homepage": "https://www.ebay.com", "color": "#e53238" },
+      "preload": "https://www.ebay.com",
+      "strip_phrases": ["NEW LISTING", "Opens in a new window or tab"],
+      "challenge_markers": ["Error Page | eBay", "Something went wrong on our end"],
+      "url": { "start": "https://www.ebay.com/sch/i.html?_fsrp=1&rt=nc&_from=R40&_nkw=", "end": "&_sacat=0" },
+      "selectors": {
+        "listings": "ul.srp-results li.s-card",
+        "title": { "css_selector": ".s-card__title .su-styled-text.primary", "type": "text", "required": true },
+        "link": { "css_selector": "a[href*=\"/itm/\"]", "type": "link", "required": true },
+        "image": { "css_selector": ".s-card__image img, img", "type": "image" },
+        "price": { "css_selector": ".s-card__price", "type": "price", "required": true },
+        "shipping": { "css_selector": ".s-card__logisticsCost", "type": "additive_price" },
+        "subtitle": { "css_selector": ".s-card__subtitle .su-styled-text", "type": "text", "ignore_filter": true }
+      }
+    },
+    "usa_newegg": {
+      "metadata": { "name": "Newegg US", "homepage": "https://www.newegg.com", "color": "#f79328" },
+      "preload": null,
+      "strip_phrases": [],
+      "url": { "start": "https://www.newegg.com/p/pl?d=", "end": "&Order=1" },
+      "selectors": {
+        "listings": "div.item-cell",
+        "title": { "css_selector": "a.item-title", "type": "text", "required": true },
+        "link": { "css_selector": "a.item-title", "type": "link", "required": true },
+        "image": { "css_selector": "a.item-img img", "type": "image" },
+        "price": { "css_selector": "li.price-current", "type": "price", "required": true },
+        "shipping": { "css_selector": "li.price-ship", "type": "misc_price" }
+      }
+    }
+  },
+  "categories": {
+    "gpu": {
+      "name": "GPUs",
+      "extra_exclude": ["mining rig", "water damage", "for parts", "not working"],
+      "minimum_value_floor": 100,
+      "notes": "Applied to every GPU query object on top of its own Include/Exclude — the scoped analogue of frogscraper's single global filtered-phrases list."
+    }
+  },
+  "query_objects": {
+    "gpu-rtx-5090": {
+      "content": "RTX 5090",
+      "include": [],
+      "include_settings": { "operator": "and", "case_sensitive": false, "require_content": true },
+      "exclude": ["bracket", "waterblock", "box only", "empty box"],
+      "exclude_settings": { "operator": "or", "case_sensitive": false },
+      "minimum_value": 500,
+      "maximum_value": 5000,
+      "category_id": "gpu"
+    }
+  },
+  "schedules": [
+    {
+      "name": "ebay rtx-5090 hourly",
+      "vendor_id": "usa_ebay",
+      "query_object_id": "gpu-rtx-5090",
+      "cron": "0 * * * *",
+      "enabled": true,
+      "options": { "headless": true, "max_listings": 120 }
+    }
+  ]
+}

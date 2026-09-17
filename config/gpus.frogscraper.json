@@ -1,0 +1,1367 @@
+{
+    "settings": {
+        "filtered_phrases": [
+            "no core",
+            "pack of",
+            "- read",
+            "no pcb",
+            "cracked",
+            "quanvec",
+            "backpl",
+            "gddr2",
+            "for ",
+            "mhz ddr5",
+            "ek-ac",
+            "2pcs\/set",
+            "workstation x",
+            "ek quantum",
+            "tarus",
+            "defekt",
+            "read ",
+            "powerlink",
+            "thermal pad",
+            "stock cooler",
+            "ek-quantum",
+            "cable",
+            "cooling fan",
+            "ekwb",
+            "parts",
+            "display ",
+            "xlr8",
+            "artifacting",
+            "damage",
+            "as-is",
+            "broken",
+            "magazine",
+            "alphacool",
+            "set of",
+            "lot of",
+            "*read*",
+            "ssd",
+            "ryzen",
+            "nvlink",
+            "refurbished",
+            "sli bridge",
+            "unstable",
+            "parts",
+            "repair",
+            "block",
+            "description",
+            "faulty",
+            " for ",
+            "only",
+            "as is",
+            "not working",
+            "*for ",
+            "mining rig",
+            "laptop",
+            "desktop",
+            "qty",
+            "i3",
+            "i5",
+            "i7",
+            "i9",
+            "riser",
+            "bracket",
+            "gaming pc",
+            "(renewed)",
+            "replacement",
+            "boxed with",
+            "artifacts",
+            "out of stock",
+            "dock ",
+            "cooler fan",
+            "turbofan",
+            "95mm",
+            "75mm",
+            "graphics card fan",
+            "87mm",
+            "4pin 12v"
+        ]
+    },
+    "queries": [
+        {
+            "Content": "RTX 5090",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RTX 5080",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RTX 5070 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RTX 5070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RX 9070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RX 9070 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 10000
+        },
+        {
+            "Content": "RTX 4090",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 5000
+        },
+        {
+            "Content": "RX 7900 XTX",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4080 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4080",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 7900 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XTX"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4070 Ti Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4070 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 7900 GRE",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4070 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6950 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3090 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 200,
+            "MaximumValue": 3000
+        },
+        {
+            "Content": "RX 7800 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3090",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 3000
+        },
+        {
+            "Content": "RX 7800 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3090",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 3000
+        },
+        {
+            "Content": "RX 6900 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3080 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6800 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3080 12GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3080",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "12GB",
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 7700 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6800",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3070 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6750 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6750 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4060 Ti 16GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4060 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super",
+                "16GB"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Titan RTX",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 5000
+        },
+        {
+            "Content": "RX 6700 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2080 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 7600 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3060 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6700 10GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2080 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 4060",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2080",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 7600",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6650 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2070 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Arc A770 16GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Arc A770 8GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6600 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 5700 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3060",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Arc A750",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Radeon VII",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1080 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2060 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6600",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 100,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "Arc A580",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 5700",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "XT "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX Vega 64",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 2060",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super",
+                "12GB"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1080",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RTX 3050",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1070 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX Vega 56",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1660 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti "
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1660 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1070",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1660",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "Ti ",
+                "Super"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 5500 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 590",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 980 Ti",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 580 8GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "R9 Fury X",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1650 Super",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 5500 XT 4GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "GTX 1060 6GB",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [
+                "3GB"
+            ],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        },
+        {
+            "Content": "RX 6500 XT",
+            "Include": [],
+            "IncludeSettings": {
+                "operator": "xor",
+                "case_sensitive": false,
+                "require_content": true
+            },
+            "Exclude": [],
+            "ExcludeSettings": {
+                "operator": "or"
+            },
+            "MinimumValue": 20,
+            "MaximumValue": 2000
+        }
+    ]
+}

@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint, vendor_tip %}
+{% block title %}Listings · {{ query.content or query.id }}{% endblock %}
+{% block heading %}Listings{% endblock %}
+{% block action %}
+  <a class="btn ghost" href="{{ url_for('ui.queries') }}">← All query objects</a>
+{% endblock %}
+
+{% block body %}
+<p class="pagelead">
+  Every distinct listing found for <b>{{ query.content or query.id }}</b>, one row each — price and
+  activity followed across scrape runs.
+  {{ hint("Identity is the listing URL with session/tracking args stripped. A listing missing from its vendor's latest clean run is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it, since they prove nothing about what's still listed. Hiding only affects this page; it does not touch stored metrics.") }}
+</p>
+
+<form class="toolbar" method="get" action="{{ url_for('ui.query_listings', qid=query.id) }}">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      <option value="all" {{ 'selected' if args.get('status', 'all') == 'all' }}>All ({{ counts.active + counts.inactive }})</option>
+      <option value="active" {{ 'selected' if args.get('status') == 'active' }}>Active ({{ counts.active }})</option>
+      <option value="inactive" {{ 'selected' if args.get('status') == 'inactive' }}>Ended / sold ({{ counts.inactive }})</option>
+    </select>
+  </label>
+  <label>Type
+    <select name="listing_type" onchange="this.form.submit()">
+      <option value="">All</option>
+      <option value="auction" {{ 'selected' if args.get('listing_type') == 'auction' }}>Auction</option>
+      <option value="buy_now" {{ 'selected' if args.get('listing_type') == 'buy_now' }}>Buy It Now</option>
+      <option value="unknown" {{ 'selected' if args.get('listing_type') == 'unknown' }}>Unknown</option>
+    </select>
+  </label>
+  <label>Vendor
+    <select name="vendor_id" onchange="this.form.submit()">
+      <option value="">All vendors</option>
+      {% for vid in vendors_used %}
+        <option value="{{ vid }}" {{ 'selected' if args.get('vendor_id') == vid }}>{{ vmap[vid].name if vid in vmap and vmap[vid].name else vid }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Show
+    <select name="show" onchange="this.form.submit()">
+      <option value="visible" {{ 'selected' if args.get('show', 'visible') == 'visible' }}>Visible ({{ counts.visible }})</option>
+      <option value="hidden" {{ 'selected' if args.get('show') == 'hidden' }}>Hidden ({{ counts.hidden }})</option>
+      <option value="all" {{ 'selected' if args.get('show') == 'all' }}>All ({{ counts.visible + counts.hidden }})</option>
+    </select>
+  </label>
+  <label>Sort
+    <select name="sort" onchange="this.form.submit()">
+      <option value="last_seen" {{ 'selected' if args.get('sort', 'last_seen') == 'last_seen' }}>Recently seen</option>
+      <option value="first_seen" {{ 'selected' if args.get('sort') == 'first_seen' }}>Newest listing</option>
+      <option value="price_asc" {{ 'selected' if args.get('sort') == 'price_asc' }}>Price: low to high</option>
+      <option value="price_desc" {{ 'selected' if args.get('sort') == 'price_desc' }}>Price: high to low</option>
+    </select>
+  </label>
+</form>
+
+<div class="listing-grid">
+{% for t in rows %}
+  <div class="lcard{{ ' hidden-listing' if t.hidden }}{{ ' inactive-listing' if not t.active }}">
+    <div class="thumb">
+      {% if t.image %}<img src="{{ t.image }}" loading="lazy" alt="">
+      {% else %}<span class="noimg">no image</span>{% endif %}
+      {% if not t.active %}<span class="thumb-flag">ended</span>{% endif %}
+    </div>
+    <div class="lbody">
+      <div class="ltitle">
+        {% if t.link %}<a href="{{ t.link }}" target="_blank" rel="noopener">{{ t.title or t.canonical_url }}</a>
+        {% else %}{{ t.title or t.canonical_url }}{% endif %}
+      </div>
+      <div class="lprice">${{ t.last_price | round | int if t.last_price is not none else '—' }}
+        {% if t.listing_type == 'auction' %}<span class="badge auction">auction</span>
+        {% elif t.listing_type == 'buy_now' %}<span class="badge buy_now">buy it now</span>
+        {% else %}<span class="badge unknown">unknown</span>{% endif %}
+        {% if t.price_change_pct is not none and t.price_change_pct != 0 %}
+          <span class="delta {{ 'up' if t.price_change_pct < 0 else 'down' }}" style="font-size:.7rem"
+                title="since first seen">{{ '%+.1f%%' % t.price_change_pct }}</span>
+        {% endif %}
+      </div>
+      <div class="lmeta">
+        {{ vendor_tip(t.vendor_id, vmap) }}
+        · {{ t.observations_count }} observation{{ 's' if t.observations_count != 1 }}
+        · seen {{ t.last_seen_at | reltime if t.last_seen_at else '—' }}
+        {% if not t.active %}· <span class="badge canceled" title="not in the last {{ t.runs_missed }} run(s)">ended / sold</span>{% endif %}
+        {% if t.hidden %}· <span class="badge canceled">hidden</span>{% endif %}
+      </div>
+      <div class="lactions">
+        {% if t.link %}<a class="btn ghost sm" href="{{ t.link }}" target="_blank" rel="noopener">Open</a>{% endif %}
+        <a class="btn ghost sm" href="{{ url_for('ui.tracked_listing_detail', tracked_id=t.id) }}">History</a>
+        {% if t.hidden %}
+        <form method="post" action="{{ url_for('ui.unhide_tracked', tracked_id=t.id) }}"><button class="btn ghost sm" type="submit">Unhide</button></form>
+        {% else %}
+        <form method="post" action="{{ url_for('ui.hide_tracked', tracked_id=t.id) }}"><button class="btn ghost sm" type="submit">Hide</button></form>
+        {% endif %}
+        <form method="post" action="{{ url_for('ui.delete_tracked', tracked_id=t.id) }}"
+              onsubmit="return confirm('Permanently delete this listing and its price history?')"><button class="btn danger sm" type="submit">Delete</button></form>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <p class="muted">no listings match this filter.</p>
+{% endfor %}
+</div>
+{% endblock %}

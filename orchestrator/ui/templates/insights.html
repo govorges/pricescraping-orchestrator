@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Insights{% endblock %}
+{% block body %}
+<p class="pagelead">
+  Current price, recent trend, and reach for every query object, one row each.
+  {{ hint("7d change compares the latest median observation to whatever was observed closest to 7 days ago. Active listings = currently-active, non-hidden tracked listings for that query.") }}
+</p>
+
+<form class="toolbar" method="get" action="{{ url_for('insights.insights_home') }}">
+  <label>Category
+    <select name="category_id" onchange="this.form.submit()">
+      <option value="">All categories</option>
+      {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if category_id == c.id }}>{{ c.name or c.id }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Sort
+    <select name="sort" onchange="this.form.submit()">
+      <option value="content" {{ 'selected' if sort == 'content' }}>Name</option>
+      <option value="price_desc" {{ 'selected' if sort == 'price_desc' }}>Price: high to low</option>
+      <option value="price_asc" {{ 'selected' if sort == 'price_asc' }}>Price: low to high</option>
+      <option value="change_desc" {{ 'selected' if sort == 'change_desc' }}>Change: biggest gain</option>
+      <option value="change_asc" {{ 'selected' if sort == 'change_asc' }}>Change: biggest drop</option>
+      <option value="active_desc" {{ 'selected' if sort == 'active_desc' }}>Most active listings</option>
+      <option value="observations_desc" {{ 'selected' if sort == 'observations_desc' }}>Most observations</option>
+    </select>
+  </label>
+  <span class="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+    <input type="text" id="isearch" placeholder="Filter…" aria-label="Filter query objects">
+  </span>
+  <span class="toolbar-end" style="display:flex;gap:6px">
+    <a class="btn ghost sm" href="{{ url_for('insights.export_leaderboard', fmt='csv', category_id=category_id) }}">Export CSV</a>
+    <a class="btn ghost sm" href="{{ url_for('insights.export_leaderboard', fmt='json', category_id=category_id) }}">Export JSON</a>
+  </span>
+</form>
+
+<div class="table-wrap"><table id="ilist">
+  <thead><tr>
+    <th>Query</th><th>Category</th><th class="num">Price</th><th class="num">7d change</th>
+    <th>Trend</th><th class="num">Active</th><th class="num">Obs</th><th class="num">Vendors</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr data-name="{{ r.content | lower }}">
+      <td><b>{{ r.content }}</b><span class="subid">{{ r.id }}</span></td>
+      <td>{% if r.category %}<span class="tag tag--cat">{{ r.category }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      <td class="num tnum">{% if r.latest_price is not none %}${{ r.latest_price | round | int }}{% else %}—{% endif %}</td>
+      <td class="num tnum">
+        {% if r.change_pct is not none %}<span class="delta {{ 'up' if r.change_pct < 0 else 'down' }}">{{ '%+.1f%%' % r.change_pct }}</span>{% else %}—{% endif %}
+      </td>
+      <td><span class="qspark{{ ' flat' if r.spark | length < 2 }}" data-spark="{{ r.spark | join(',') }}"></span></td>
+      <td class="num tnum">{{ r.active_listings }}</td>
+      <td class="num tnum">{{ r.observations }}</td>
+      <td class="num tnum">{{ r.vendors }}</td>
+      <td><a class="btn ghost sm" href="{{ url_for('insights.insight_detail', qid=r.id) }}">Explore</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">no query objects{% if category_id %} in this category{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<script>
+(function () {
+  var input = document.getElementById("isearch");
+  if (!input) return;
+  input.addEventListener("input", function () {
+    var term = input.value.trim().toLowerCase();
+    document.querySelectorAll("#ilist tbody tr[data-name]").forEach(function (tr) {
+      tr.hidden = term !== "" && tr.dataset.name.indexOf(term) === -1;
+    });
+  });
+})();
+</script>
+{% endblock %}

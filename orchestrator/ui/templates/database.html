@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Database{% endblock %}
+{% block body %}
+<p class="pagelead">
+  Where everything above actually lives, and the few maintenance actions that
+  don't belong on a query-object or job page.
+  {{ hint("'durable' tables (tracked listings + their price-point history) are the deduplicated, long-term record of every real-world listing ever seen — the retention purge below never touches them. 'ephemeral' tables (jobs, listings, price observations) are per-run data that's safe to prune once it's old.") }}
+</p>
+
+<div class="row split">
+  <div class="panel">
+    <header><h2>Storage</h2></header>
+    <div class="dl">
+      <dt>Engine</dt><dd class="mono">{{ info.dialect }}</dd>
+      {% if info.path %}
+      <dt>File</dt><dd class="mono" style="word-break:break-all">{{ info.path }}</dd>
+      <dt>Size</dt><dd>{% if info.size_bytes is not none %}{{ '%.1f'|format(info.size_bytes / 1048576) }} MB{% else %}— file not created yet{% endif %}</dd>
+      {% else %}
+      <dt>Connection</dt><dd class="mono" style="word-break:break-all">{{ info.url }}</dd>
+      <dt class="muted">Backups</dt><dd class="muted">not sqlite — use your managed database's own backup/retention tooling instead of the controls below.</dd>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Rows by table</h2></header>
+    <table>
+      <thead><tr><th>Table</th><th></th><th class="num">Rows</th></tr></thead>
+      <tbody>
+      {% for c in counts %}
+        <tr>
+          <td class="mono">{{ c.table }}</td>
+          <td>
+            {% if c.kind == 'durable' %}<span class="pill pill--ok"><i class="dot"></i>durable</span>
+            {% elif c.kind == 'ephemeral' %}<span class="pill"><i class="dot"></i>ephemeral</span>
+            {% else %}<span class="pill pill--info"><i class="dot"></i>config</span>{% endif %}
+          </td>
+          <td class="num tnum">{{ '{:,}'.format(c.rows) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if is_sqlite %}
+<div class="panel" style="margin-top:20px">
+  <header>
+    <h2>Backups</h2>
+    <span class="sub">a point-in-time copy of the sqlite file, taken with the safe online-backup API (not a raw file copy)</span>
+    <div class="right">
+      <form class="inline" method="post" action="{{ url_for('ui.create_backup_view') }}">
+        <button type="submit" class="btn">Back up now</button>
+      </form>
+    </div>
+  </header>
+  <table>
+    <thead><tr><th>File</th><th class="num">Size</th><th>Created</th><th></th></tr></thead>
+    <tbody>
+    {% for b in backups %}
+      <tr>
+        <td class="mono">{{ b.name }}</td>
+        <td class="num tnum">{{ '%.1f'|format(b.size_bytes / 1048576) }} MB</td>
+        <td class="muted">{{ b.created_at.strftime('%Y-%m-%d %H:%M') }} UTC</td>
+        <td>
+          <div class="rowact">
+            <a class="btn ghost sm" href="{{ url_for('ui.download_backup_view', name=b.name) }}">Download</a>
+            <form class="inline" method="post" action="{{ url_for('ui.delete_backup_view', name=b.name) }}"
+                  onsubmit="return confirm('Delete backup {{ b.name }}?')">
+              <button class="btn danger sm" type="submit">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">no backups yet</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel" style="margin-top:20px">
+  <header>
+    <h2>Maintenance</h2>
+    <span class="sub">reclaim disk space after deleting rows — sqlite doesn't shrink the file on its own</span>
+  </header>
+  <form method="post" action="{{ url_for('ui.vacuum_view') }}">
+    <button type="submit" class="btn ghost">Vacuum database</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="danger-zone" style="margin-top:20px">
+  <h3 style="margin-bottom:.4rem">Purge old jobs &amp; observations</h3>
+  <p class="muted" style="max-width:70ch">
+    Deletes <span class="mono">job</span> rows (and their per-run <span class="mono">listing</span> rows)
+    and <span class="mono">price_observation</span> rows older than the cutoff below. This is raw scrape-run
+    churn — it does <b>not</b> touch tracked listings or their price history, which is what the price-trend
+    charts and "ended / sold" detection actually run on.
+  </p>
+  <form method="post" action="{{ url_for('ui.purge_old_data_view') }}"
+        onsubmit="return confirm('Permanently delete job + observation rows older than ' + this.older_than_days.value + ' days? This cannot be undone.')">
+    <div class="formgrid" style="grid-template-columns:auto auto">
+      <label>Older than</label>
+      <div><input type="number" name="older_than_days" value="90" min="7" step="1" style="width:6rem"> days</div>
+    </div>
+    <div class="formfoot"><button type="submit" class="btn danger">Purge</button></div>
+  </form>
+</div>
+{% endblock %}

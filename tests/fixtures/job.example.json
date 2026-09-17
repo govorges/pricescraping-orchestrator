@@ -1,0 +1,43 @@
+{
+  "job_id": "00000000-0000-0000-0000-000000000001",
+  "created_at": "2026-08-30T12:00:00Z",
+  "scheduled_by": "geoauteli@gmail.com",
+  "attempt": 1,
+  "vendor": {
+    "identifier": "usa_ebay",
+    "metadata": { "name": "eBay US", "homepage": "https://www.ebay.com", "color": "#e53238" },
+    "preload": null,
+    "strip_phrases": ["NEW LISTING", "Opens in a new window or tab"],
+    "challenge_markers": ["Error Page | eBay", "Something went wrong on our end"],
+    "url": {
+      "start": "https://www.ebay.com/sch/i.html?_nkw=",
+      "end": ""
+    },
+    "selectors": {
+      "listings": "ul.srp-results li.s-card",
+      "title": { "css_selector": ".s-card__title .su-styled-text.primary", "type": "text", "required": true },
+      "link": { "css_selector": "a[href*=\"/itm/\"]", "type": "link", "required": true },
+      "image": { "css_selector": ".s-card__image img, img", "type": "image" },
+      "price": { "css_selector": ".s-card__price", "type": "price", "required": true },
+      "shipping": { "css_selector": ".s-card__logisticsCost", "type": "additive_price" },
+      "subtitle": { "css_selector": ".s-card__subtitle .su-styled-text", "type": "text", "ignore_filter": true }
+    }
+  },
+  "query_object": {
+    "id": "gpu-rtx-5090",
+    "Content": "RTX 5090",
+    "Include": [],
+    "IncludeSettings": { "operator": "and", "case_sensitive": false, "require_content": true },
+    "Exclude": ["bracket", "waterblock", "box only", "empty box"],
+    "ExcludeSettings": { "operator": "or", "case_sensitive": false },
+    "MinimumValue": 500,
+    "MaximumValue": 5000
+  },
+  "options": {
+    "engine": "firefox",
+    "headless": true,
+    "nav_timeout_ms": 30000,
+    "request_delay_ms": 3000,
+    "max_listings": 120
+  }
+}

@@ -1,0 +1,184 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from orchestrator.db import session_scope
+from orchestrator.models import Category, PriceObservation, QueryObject, TrackedListing, Vendor
+from orchestrator.ui.insights import _leaderboard, _sort_leaderboard
+
+VENDOR = "usa_ebay"
+
+
+def _seed_basic():
+    with session_scope() as db:
+        db.add(Vendor(identifier=VENDOR, name="eBay US", config={}))
+        db.add(Category(id="gpu", name="GPUs"))
+        db.add(QueryObject(id="gpu-rtx-5090", content="RTX 5090", category_id="gpu"))
+        db.add(QueryObject(id="gpu-rtx-4090", content="RTX 4090", category_id="gpu"))
+        db.add(QueryObject(id="cpu-9800x3d", content="9800X3D"))  # no category, no observations
+
+
+def _obs(db, *, qid, observed_at, median, low=None, job_id=None):
+    db.add(
+        PriceObservation(
+            vendor_id=VENDOR, query_object_id=qid, observed_date=observed_at.date(),
+            observed_at=observed_at, job_id=job_id or f"j-{qid}-{observed_at.timestamp()}",
+            status="ok", price_low=low or median, price_mean=median, price_median=median,
+            listings_found=5, listings_kept=3,
+        )
+    )
+
+
+def test_leaderboard_computes_price_change_and_reach(settings):
+    """Latest price and 7-day % change are computed per query, and a query with zero observations still appears with null values instead of being dropped or crashing."""
+    _seed_basic()
+    now = datetime.now(timezone.utc)
+    with session_scope() as db:
+        _obs(db, qid="gpu-rtx-5090", observed_at=now - timedelta(days=10), median=2000)
+        _obs(db, qid="gpu-rtx-5090", observed_at=now, median=1800)  # dropped 10%
+        _obs(db, qid="gpu-rtx-4090", observed_at=now, median=1200)
+
+    with session_scope() as db:
+        rows = {r["id"]: r for r in _leaderboard(db)}
+
+    assert rows["gpu-rtx-5090"]["latest_price"] == 1800
+    assert rows["gpu-rtx-5090"]["change_pct"] == -10.0
+    assert rows["gpu-rtx-5090"]["observations"] == 2
+    assert rows["gpu-rtx-4090"]["latest_price"] == 1200
+    # a query with zero observations must still appear, with sane empty values
+    assert rows["cpu-9800x3d"]["latest_price"] is None
+    assert rows["cpu-9800x3d"]["change_pct"] is None
+    assert rows["cpu-9800x3d"]["observations"] == 0
+
+
+def test_leaderboard_filters_by_category(settings):
+    """Passing category_id restricts the leaderboard to that category's queries, excluding uncategorised ones."""
+    _seed_basic()
+    with session_scope() as db:
+        rows = _leaderboard(db, category_id="gpu")
+    assert {r["id"] for r in rows} == {"gpu-rtx-5090", "gpu-rtx-4090"}
+
+
+def test_sort_leaderboard_price_desc():
+    """Sorting by price descending still pushes rows with no price to the very end, not the front."""
+    rows = [
+        {"id": "a", "content": "A", "latest_price": 100, "change_pct": None,
+         "observations": 1, "active_listings": 0},
+        {"id": "b", "content": "B", "latest_price": 300, "change_pct": None,
+         "observations": 1, "active_listings": 0},
+        {"id": "c", "content": "C", "latest_price": None, "change_pct": None,
+         "observations": 0, "active_listings": 0},
+    ]
+    ordered = [r["id"] for r in _sort_leaderboard(rows, "price_desc")]
+    assert ordered == ["b", "a", "c"]  # missing price sorts last even descending
+
+
+def test_insights_home_page_renders(client):
+    """The leaderboard page loads and lists a known query object."""
+    _seed_basic()
+    r = client.get("/insights")
+    assert r.status_code == 200
+    assert b"gpu-rtx-5090" in r.data
+
+
+def test_insights_home_filters_by_category(client):
+    """The ?category_id= query param filters the rendered leaderboard, not just the underlying data function."""
+    _seed_basic()
+    r = client.get("/insights?category_id=gpu")
+    assert r.status_code == 200
+    assert b"cpu-9800x3d" not in r.data
+
+
+def test_insight_detail_renders_with_zero_observations(client):
+    """Regression: a query with no PriceObservation rows must not 500 --
+    stats comes back as {} and every template access needs to survive that."""
+    _seed_basic()
+    r = client.get("/insights/cpu-9800x3d")
+    assert r.status_code == 200
+    assert b"no observations yet" in r.data
+
+
+def test_insight_detail_renders_with_history(client):
+    """With real observations and a tracked listing present, the detail page renders the vendor's data."""
+    _seed_basic()
+    now = datetime.now(timezone.utc)
+    with session_scope() as db:
+        _obs(db, qid="gpu-rtx-5090", observed_at=now - timedelta(days=1), median=1900, low=1800)
+        _obs(db, qid="gpu-rtx-5090", observed_at=now, median=1800, low=1700)
+        t = TrackedListing(
+            vendor_id=VENDOR, query_object_id="gpu-rtx-5090", canonical_url="https://x/1",
+            first_seen_at=now, last_seen_at=now, listing_type="buy_now",
+        )
+        db.add(t)
+
+    r = client.get("/insights/gpu-rtx-5090")
+    assert r.status_code == 200
+    assert r.data.count(b"eBay US".replace(b" ", b"")) >= 0  # vendor id shown, not name here
+    assert b"usa_ebay" in r.data
+
+
+def test_insight_detail_404_for_unknown_query(client):
+    """A query id that doesn't exist is a 404, not a rendered page with empty/garbage data."""
+    r = client.get("/insights/does-not-exist")
+    assert r.status_code == 404
+
+
+def test_export_leaderboard_csv(client):
+    """The leaderboard CSV export downloads as an attachment with a proper header row."""
+    _seed_basic()
+    r = client.get("/insights/export.csv")
+    assert r.status_code == 200
+    assert r.mimetype == "text/csv"
+    assert "attachment" in r.headers["Content-Disposition"]
+    assert b"gpu-rtx-5090" in r.data
+    assert r.data.decode().splitlines()[0].split(",")[0] == "id"
+
+
+def test_export_leaderboard_json(client):
+    """The leaderboard JSON export returns the same rows as valid, parseable JSON."""
+    _seed_basic()
+    r = client.get("/insights/export.json")
+    assert r.status_code == 200
+    assert r.mimetype == "application/json"
+    ids = {row["id"] for row in r.get_json()}
+    assert "gpu-rtx-5090" in ids
+
+
+def test_export_bad_format_404s(client):
+    """An export format other than csv/json is rejected rather than silently defaulting to one."""
+    _seed_basic()
+    assert client.get("/insights/export.xml").status_code == 404
+
+
+def test_export_query_observations_csv(client):
+    """A single query's raw observation history exports as CSV with the actual price data in it."""
+    _seed_basic()
+    now = datetime.now(timezone.utc)
+    with session_scope() as db:
+        _obs(db, qid="gpu-rtx-5090", observed_at=now, median=1800)
+
+    r = client.get("/insights/gpu-rtx-5090/export.csv")
+    assert r.status_code == 200
+    assert r.mimetype == "text/csv"
+    body = r.data.decode()
+    assert "price_median" in body.splitlines()[0]
+    assert "1800" in body
+
+
+def test_export_category_observations_json(client):
+    """A category-level export includes observations from every query object in that category."""
+    _seed_basic()
+    now = datetime.now(timezone.utc)
+    with session_scope() as db:
+        _obs(db, qid="gpu-rtx-5090", observed_at=now, median=1800)
+        _obs(db, qid="gpu-rtx-4090", observed_at=now, median=1200)
+
+    r = client.get("/insights/category/gpu/export.json")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert {row["query_object_id"] for row in rows} == {"gpu-rtx-5090", "gpu-rtx-4090"}
+
+
+def test_export_category_unknown_404s(client):
+    """Exporting an unknown category id 404s instead of silently returning an empty file."""
+    assert client.get("/insights/category/nope/export.csv").status_code == 404

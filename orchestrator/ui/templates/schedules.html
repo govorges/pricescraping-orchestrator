@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint, name_sub %}
+{% block title %}Schedules{% endblock %}
+{% block body %}
+<h1>Schedules {{ hint("A recurring rule: on its cron schedule the orchestrator assembles a job from the vendor + query object and drops it on the queue. 'Run now' fires one immediately.") }}</h1>
+
+<table>
+  <thead><tr>
+    <th>ID</th><th>Name</th><th>Vendor</th><th>Query object</th>
+    <th>Cron <span class="subid">UTC</span></th><th>Enabled</th>
+    <th>Last run</th><th>Next run</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for s in schedules %}
+    <tr>
+      <td>{{ s.id }}</td>
+      <td>{{ s.name }}</td>
+      <td>{{ name_sub(s.vendor.name if s.vendor else None, s.vendor_id) }}</td>
+      <td>{{ name_sub(s.query_object.content if s.query_object else None, s.query_object_id) }}</td>
+      <td class="mono">{{ s.cron }}</td>
+      <td>{{ 'yes' if s.enabled else 'no' }}</td>
+      <td class="muted">{{ s.last_run_at.strftime('%Y-%m-%d %H:%M') if s.last_run_at else '—' }}</td>
+      <td class="muted">{{ s.next_run_at.strftime('%Y-%m-%d %H:%M') if s.next_run_at else '—' }}</td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('ui.run_schedule', sid=s.id) }}">
+          <button type="submit" class="btn ghost sm">Run now</button>
+        </form>
+        <form class="inline" method="post" action="{{ url_for('ui.delete_schedule', sid=s.id) }}"
+              onsubmit="return confirm('Delete schedule {{ s.id }}?')">
+          <button class="btn danger sm" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">no schedules yet</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="muted">Cron fields fire only while a scheduler process is running (<span class="mono">python -m orchestrator --scheduler</span>).
+   "Run now" works regardless.</p>
+
+<details class="panel">
+  <summary>Add schedule</summary>
+  <form method="post" action="{{ url_for('ui.create_schedule') }}" style="margin-top:1rem">
+    <div class="formgrid">
+      <label>Name</label><input name="name" placeholder="ebay rtx-5090 hourly">
+      <label>Vendor</label>
+      <select name="vendor_id" required>
+        {% for v in vendors %}<option value="{{ v.identifier }}">{{ v.name or v.identifier }} ({{ v.identifier }})</option>{% endfor %}
+      </select>
+      <label>Query object</label>
+      <select name="query_object_id" required>
+        {% for q in queries %}<option value="{{ q.id }}">{{ q.content or q.id }} ({{ q.id }})</option>{% endfor %}
+      </select>
+      <label>Cron {{ hint("Standard 5-field cron (min hour dom mon dow), evaluated in UTC.") }}</label>
+      <div class="cronfield">
+        <div class="cronbtns">
+          <button type="button" class="secondary" data-cron="*/15 * * * *">Every 15 min</button>
+          <button type="button" class="secondary" data-cron="0 * * * *">Hourly</button>
+          <button type="button" class="secondary" data-cron="0 */6 * * *">Every 6 h</button>
+          <button type="button" class="secondary" data-cron="0 9 * * *">Daily 09:00</button>
+          <button type="button" class="secondary" data-cron="0 9 * * 1">Weekly Mon 09:00</button>
+        </div>
+        <input class="cron-input mono" name="cron" required placeholder="0 * * * *">
+        <div class="cron-preview muted" style="margin-top:.3rem"></div>
+      </div>
+      <label>Enabled</label><input type="checkbox" name="enabled" checked>
+      <label>Options JSON {{ hint("Per-job overrides passed to the worker: engine, headless, nav_timeout_ms, request_delay_ms, max_listings, challenge_retries. Any omitted key falls back to the worker's env default.") }}<span class="subid">optional</span></label>
+      <textarea name="options" style="min-height:5rem" placeholder='{"headless": true, "max_listings": 120}'></textarea>
+    </div>
+    <div class="formfoot"><button type="submit" class="btn">Create</button></div>
+  </form>
+</details>
+
+<div class="eyebrow" style="margin-top:1.8rem">Category schedules {{ hint("Fans out to every query object in the category on each tick — against one vendor, or every enabled vendor if none is picked. Handy for 'check ALL GPU prices once a day' instead of one schedule per query.") }}</div>
+
+<table>
+  <thead><tr>
+    <th>ID</th><th>Name</th><th>Category</th><th>Vendor</th>
+    <th>Cron <span class="subid">UTC</span></th><th>Enabled</th>
+    <th>Last run</th><th>Next run</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for cs in category_schedules %}
+    <tr>
+      <td>{{ cs.id }}</td>
+      <td>{{ cs.name }}</td>
+      <td>{{ name_sub(cs.category.name if cs.category else None, cs.category_id) }} <span class="muted">({{ cs.category.queries | length if cs.category else 0 }} queries)</span></td>
+      <td>{{ name_sub(cs.vendor.name, cs.vendor_id) if cs.vendor_id else 'all enabled vendors' }}</td>
+      <td class="mono">{{ cs.cron }}</td>
+      <td>{{ 'yes' if cs.enabled else 'no' }}</td>
+      <td class="muted">{{ cs.last_run_at.strftime('%Y-%m-%d %H:%M') if cs.last_run_at else '—' }}</td>
+      <td class="muted">{{ cs.next_run_at.strftime('%Y-%m-%d %H:%M') if cs.next_run_at else '—' }}</td>
+      <td>
+        <form class="inline" method="post" action="{{ url_for('ui.run_category_schedule', sid=cs.id) }}">
+          <button type="submit" class="btn ghost sm">Run now</button>
+        </form>
+        <form class="inline" method="post" action="{{ url_for('ui.delete_category_schedule', sid=cs.id) }}"
+              onsubmit="return confirm('Delete category schedule {{ cs.id }}?')">
+          <button class="btn danger sm" type="submit">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">no category schedules yet</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<details class="panel">
+  <summary>Add category schedule</summary>
+  <form method="post" action="{{ url_for('ui.create_category_schedule') }}" style="margin-top:1rem">
+    <div class="formgrid">
+      <label>Name</label><input name="name" placeholder="gpu prices daily">
+      <label>Category</label>
+      <select name="category_id" required>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name or c.id }} ({{ c.queries | length }} queries)</option>{% endfor %}
+      </select>
+      <label>Vendor {{ hint("Leave on 'All enabled vendors' to scrape every query in the category from every enabled vendor on each tick.") }}</label>
+      <select name="vendor_id">
+        <option value="">— all enabled vendors —</option>
+        {% for v in vendors %}<option value="{{ v.identifier }}">{{ v.name or v.identifier }} ({{ v.identifier }})</option>{% endfor %}
+      </select>
+      <label>Cron {{ hint("Standard 5-field cron (min hour dom mon dow), evaluated in UTC.") }}</label>
+      <div class="cronfield">
+        <div class="cronbtns">
+          <button type="button" class="secondary" data-cron="0 * * * *">Hourly</button>
+          <button type="button" class="secondary" data-cron="0 */6 * * *">Every 6 h</button>
+          <button type="button" class="secondary" data-cron="0 9 * * *">Daily 09:00</button>
+          <button type="button" class="secondary" data-cron="0 9 * * 1">Weekly Mon 09:00</button>
+        </div>
+        <input class="cron-input mono" name="cron" required placeholder="0 9 * * *">
+        <div class="cron-preview muted" style="margin-top:.3rem"></div>
+      </div>
+      <label>Enabled</label><input type="checkbox" name="enabled" checked>
+      <label>Options JSON<span class="subid">optional · same overrides as a regular schedule</span></label>
+      <textarea name="options" style="min-height:5rem" placeholder='{"headless": true, "max_listings": 120}'></textarea>
+    </div>
+    <div class="formfoot"><button type="submit" class="btn">Create</button></div>
+  </form>
+</details>
+
+<script>
+(function () {
+  document.querySelectorAll('.cronfield').forEach(function (field) {
+    var input = field.querySelector('.cron-input');
+    var preview = field.querySelector('.cron-preview');
+    if (!input) return;
+    field.querySelectorAll('.cronbtns button').forEach(function (b) {
+      b.addEventListener('click', function () { input.value = b.dataset.cron; update(); });
+    });
+    var t;
+    input.addEventListener('input', function () { clearTimeout(t); t = setTimeout(update, 300); });
+    function update() {
+      var v = input.value.trim();
+      if (!v) { preview.textContent = ''; return; }
+      fetch('/api/v1/cron/preview?expr=' + encodeURIComponent(v) + '&n=3')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          preview.textContent = d.valid
+            ? 'next: ' + d.next.map(function (s) { return s.replace('T', ' ').replace('+00:00', ' UTC'); }).join('  ·  ')
+            : '⚠ not a valid cron expression';
+        })
+        .catch(function () { preview.textContent = ''; });
+    }
+  });
+})();
+</script>
+{% endblock %}

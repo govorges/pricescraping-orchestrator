@@ -1,0 +1,27 @@
+{
+  "job_id": "00000000-0000-0000-0000-000000000001",
+  "vendor_id": "usa_ebay",
+  "query_object_id": "gpu-rtx-5090",
+  "observed_date": "2026-08-30",
+  "observed_at": "2026-08-30T12:03:11Z",
+  "status": "ok",
+  "error": null,
+  "duration_ms": 4210,
+  "worker": { "node": "node-1", "container": "worker-3", "version": "0.1.0" },
+  "metrics": {
+    "listings_found": 42,
+    "listings_kept": 30,
+    "price_low": 1999.0,
+    "price_mean": 2350.55,
+    "price_median": 2299.0
+  },
+  "listings": [
+    {
+      "title": "NVIDIA GeForce RTX 5090 Founders Edition",
+      "link": "https://www.ebay.com/itm/123",
+      "image": "https://i.ebayimg.com/images/g/abc/s-l500.jpg",
+      "price": 1999.0,
+      "extra": { "shipping": 0.0, "condition": "Brand New" }
+    }
+  ]
+}

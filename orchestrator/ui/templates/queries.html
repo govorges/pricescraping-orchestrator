@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint, phrase_list %}
+{% block title %}Query objects{% endblock %}
+{% block action %}
+  <button class="btn" type="button" data-slideover="editor-new">
+    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New query object</span>
+  </button>
+{% endblock %}
+
+{% macro band_pct(v, smax) %}{{ ((v / smax * 100) if smax else 0) | round(1) }}{% endmacro %}
+
+{% macro qeditor(q, categories, stats) %}
+{% set edit = q is not none %}
+{% set s = stats.get(q.id) if edit else None %}
+{% set smax = ([ (q.maximum_value if edit and q.maximum_value is not none else 0),
+                 ((s.mean_max if s else 0) or 0) * 1.35,
+                 ((q.minimum_value if edit else 0) or 0) * 2, 1000 ] | max) | round(-2, 'ceil') | int %}
+<aside class="slideover" id="{{ 'editor-' + q.id if edit else 'editor-new' }}" hidden aria-label="{{ 'Edit ' + (q.content or q.id) if edit else 'New query object' }}">
+  <form method="post" action="{{ url_for('ui.update_query', qid=q.id) if edit else url_for('ui.create_query') }}"
+        style="display:flex;flex-direction:column;height:100%">
+    <div class="slideover-head">
+      <div class="t">
+        <h2>{{ q.content or q.id if edit else 'New query object' }}</h2>
+        <p>{% if edit %}<span class="mono">{{ q.id }}</span> · {{ (s.observations if s else 0) }} observations{% else %}what to search for and how to filter it{% endif %}</p>
+      </div>
+      <button type="button" class="icon-btn" data-slideover-close aria-label="Close">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+    <div class="slideover-body">
+      {% if not edit %}
+      <div class="field">
+        <label>ID <span class="opt">— permanent key</span></label>
+        <input name="id" required pattern="[a-zA-Z0-9_.:@+~-]+" placeholder="gpu-rtx-5090" autofocus>
+      </div>
+      {% endif %}
+
+      <div class="field">
+        <label>Search phrase</label>
+        <input name="content" value="{{ q.content if edit else '' }}" placeholder="RTX 5090">
+        <span class="help">Sent to each vendor, and required in every kept listing title.</span>
+      </div>
+
+      <div class="field">
+        <label>Include <span class="opt">— all must appear</span></label>
+        <div class="chips" data-chipeditor="#inc-{{ q.id if edit else 'new' }}">
+          {% for p in (q.include if edit else []) %}
+          <span class="chip" data-val="{{ p }}">{{ p }} <button type="button" aria-label="Remove {{ p }}">×</button></span>
+          {% endfor %}
+          <input class="chip-input" type="text" placeholder="add phrase…" aria-label="Add include phrase">
+        </div>
+        <textarea name="include" id="inc-{{ q.id if edit else 'new' }}" hidden>{{ (q.include if edit else []) | join('\n') }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>Exclude <span class="opt">— drop if any appears</span></label>
+        <div class="chips" data-chipeditor="#exc-{{ q.id if edit else 'new' }}" data-chip-class="exc">
+          {% for p in (q.exclude if edit else []) %}
+          <span class="chip exc" data-val="{{ p }}">{{ p }} <button type="button" aria-label="Remove {{ p }}">×</button></span>
+          {% endfor %}
+          <input class="chip-input" type="text" placeholder="add phrase…" aria-label="Add exclude phrase">
+        </div>
+        <textarea name="exclude" id="exc-{{ q.id if edit else 'new' }}" hidden>{{ (q.exclude if edit else []) | join('\n') }}</textarea>
+        {% if edit and q.category %}
+          {% set cat_excl = q.effective_exclude() | reject("in", q.exclude) | list %}
+          {% if cat_excl %}
+          <details class="excollapse" style="margin-top:8px">
+            <summary>+{{ cat_excl | length }} more from <b>{{ q.category.name or q.category.id }}</b></summary>
+            <div class="chips">{% for p in cat_excl %}<span class="chip from-cat">{{ p }}</span>{% endfor %}</div>
+          </details>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <div class="field">
+        <label>Price band</label>
+        <div class="band" data-scale-max="{{ smax }}"
+             data-min="{{ q.minimum_value or 0 if edit else 0 }}"
+             data-max="{{ (q.maximum_value if q.maximum_value is not none else '') if edit else '' }}">
+          <div class="band-track">
+            <div class="rail"></div>
+            {% if s and s.low_min is not none and s.mean_max is not none %}
+            <div class="band-observed" style="left:{{ band_pct(s.low_min, smax) }}%;right:{{ 100 - (band_pct(s.mean_max, smax) | float) }}%"></div>
+            {% endif %}
+            <div class="band-range"></div>
+            <button class="band-handle" type="button" data-role="min" aria-label="Minimum price"></button>
+            <button class="band-handle" type="button" data-role="max" aria-label="Maximum price"></button>
+          </div>
+          <div class="band-scale"><span>$0</span><span>${{ '{:,}'.format((smax // 2)) }}</span><span>${{ '{:,}'.format(smax) }}</span></div>
+          <div class="band-out">
+            <span class="v"><small>min </small><output data-out="min"></output></span>
+            <span class="v"><small>max </small><output data-out="max"></output></span>
+          </div>
+          <input type="hidden" name="minimum_value" data-field="min" value="{{ q.minimum_value or 0 if edit else 0 }}">
+          <input type="hidden" name="maximum_value" data-field="max" value="{{ (q.maximum_value if q.maximum_value is not none else '') if edit else '' }}">
+          {% if s and s.low_min is not none %}<span class="help">Shaded band = observed ${{ s.low_min | round | int }}–${{ s.mean_max | round | int }} across {{ s.observations }} runs.</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Category</label>
+        <select name="category_id">
+          <option value="">— none —</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}" {{ 'selected' if edit and q.category_id == c.id }}>{{ c.name or c.id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if edit %}
+      {% set lo, hi = q.effective_band() %}
+      <div class="preview">
+        <p>Effective filter — query + category</p>
+        <div class="kv"><span>Exclude</span><span>{{ phrase_list(q.effective_exclude()) }}</span></div>
+        <div class="kv"><span>Price band</span><span>${{ lo | round | int }} – {{ ('$' ~ (hi | round | int)) if hi is not none else 'no cap' }}
+          {%- if q.category and (lo != (q.minimum_value or 0) or hi != q.maximum_value) %} <span class="muted">(narrowed by category)</span>{% endif %}</span></div>
+      </div>
+
+      <div class="note">
+        <p style="margin-bottom:.35rem"><b>Apply excludes to existing listings</b></p>
+        <p class="help">
+          Exclude phrases only filter <em>future</em> scrapes. This hides any currently-active tracked
+          listing for this query whose title now matches its effective exclude list above.
+        </p>
+        <button type="submit" class="btn ghost sm" formnovalidate
+                formaction="{{ url_for('ui.apply_query_excludes', qid=q.id) }}"
+                onclick="return confirm('Hide existing listings for {{ q.id }} that match its exclude phrases?\n\nThis only hides matches — it does not delete anything, and hidden listings can be unhidden later.')">
+          Apply now
+        </button>
+      </div>
+      {% endif %}
+    </div>
+    <div class="slideover-foot">
+      {% if edit %}
+      <button type="submit" class="btn danger" formnovalidate
+              formaction="{{ url_for('ui.delete_query', qid=q.id) }}"
+              onclick="return confirm('Delete query object {{ q.id }}? Schedules that use it will break.')">Delete</button>
+      {% endif %}
+      <button type="button" class="btn ghost" data-slideover-close>Cancel</button>
+      <button type="submit" class="btn">{{ 'Save changes' if edit else 'Create query object' }}</button>
+    </div>
+  </form>
+</aside>
+{% endmacro %}
+
+{% block body %}
+<div class="toolbar">
+  <span class="search">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
+    <input type="text" id="qsearch" placeholder="Filter query objects…" aria-label="Filter">
+  </span>
+  <div class="filter-chips" id="catfilter">
+    <button data-cat="" aria-pressed="true">All</button>
+    {% for c in categories %}<button data-cat="{{ c.id }}" aria-pressed="false">{{ c.name or c.id }}</button>{% endfor %}
+    {% if queries | selectattr('category_id', 'none') | list %}<button data-cat="__none__" aria-pressed="false">Uncategorised</button>{% endif %}
+  </div>
+  <label>Sort
+    <select id="qsort">
+      <option value="name">Name</option>
+      <option value="price_desc">Price: high to low</option>
+      <option value="price_asc">Price: low to high</option>
+      <option value="listings_desc">Most active listings</option>
+    </select>
+  </label>
+</div>
+
+<div class="qlist" id="qlist">
+{% for q in queries %}
+{% set s = stats.get(q.id) %}
+{% set rs = run_state.get(q.id) %}
+{% set spark = sparks.get(q.id) or [] %}
+{% set lo, hi = q.effective_band() %}
+{% set drift = (((spark[-1] - spark[0]) / spark[0] * 100) if spark | length > 1 and spark[0] else None) %}
+{% set n_active = active_counts.get(q.id, 0) %}
+  <div class="qrow" data-name="{{ (q.content or q.id) | lower }} {{ q.id }}" data-cat="{{ q.category_id or '__none__' }}"
+       data-price="{{ s.latest.price_median if s and s.latest.price_median is not none else '' }}"
+       data-listings="{{ n_active }}">
+    <div class="name">
+      <div class="h">
+        <b>{{ q.content or q.id }}</b>
+        <span class="mono">{{ q.id }}</span>
+        {% if q.category %}<span class="tag tag--cat">{{ q.category.name or q.category.id }}</span>{% endif %}
+      </div>
+      <div class="sub">band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}
+        {%- if s %} · data {{ s.first_date }} → {{ s.last_date }}{% endif %}</div>
+    </div>
+    <span class="qspark{{ ' flat' if spark | length < 2 }}" data-spark="{{ spark | join(',') }}"></span>
+    <div class="stat">
+      <b class="tnum">{% if s and s.latest.price_median is not none %}${{ s.latest.price_median | round | int }}{% else %}—{% endif %}</b>
+      <span>median · {{ n_active }} active listing{{ 's' if n_active != 1 }}</span>
+    </div>
+    <div class="runstate">
+      {% if rs and rs.zero_runs %}
+        <span class="pill pill--warn"><i class="dot"></i>0 listings · {{ rs.zero_runs }} runs</span>
+        <span>selector drift?</span>
+      {% elif rs and rs.job %}
+        <span class="pill pill--{{ 'ok' if rs.job.status == 'ok' else ('warn' if rs.job.status in ('partial','queued','running') else 'crit') }}">
+          <i class="dot"></i>{{ rs.job.status }} · {{ (rs.job.result_at or rs.job.created_at) | reltime }}</span>
+        {% if drift is not none %}<span class="delta {{ 'up' if drift >= 0 else 'down' }}">{{ '▲' if drift >= 0 else '▼' }} {{ drift | abs | round(1) }}% recent</span>{% endif %}
+      {% else %}
+        <span class="pill"><i class="dot"></i>no runs yet</span>
+      {% endif %}
+    </div>
+    <div class="rowact">
+      <a class="btn ghost sm" href="{{ url_for('ui.query_listings', qid=q.id) }}">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+        <span>View Listings</span>
+      </a>
+      <a class="btn ghost sm" href="{{ url_for('insights.insight_detail', qid=q.id) }}">
+        <svg viewBox="0 0 24 24"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/></svg>
+        <span>Insights</span>
+      </a>
+      <button class="kebab" type="button" data-slideover="editor-{{ q.id }}" aria-label="Edit {{ q.content or q.id }}">
+        <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      </button>
+    </div>
+  </div>
+{% else %}
+  <div class="qrow"><span class="muted">no query objects yet — create one, or run <span class="mono">python scripts/seed_db.py</span></span></div>
+{% endfor %}
+</div>
+
+<script>
+(function () {
+  var search = document.getElementById("qsearch");
+  var chips = document.getElementById("catfilter");
+  var sortSel = document.getElementById("qsort");
+  var list = document.getElementById("qlist");
+  var rows = Array.prototype.slice.call(document.querySelectorAll("#qlist .qrow[data-name]"));
+  var cat = "";
+  function apply() {
+    var term = (search.value || "").toLowerCase().trim();
+    rows.forEach(function (r) {
+      var okTerm = !term || r.dataset.name.indexOf(term) !== -1;
+      var okCat = !cat || (cat === "__none__" ? r.dataset.cat === "__none__" : r.dataset.cat === cat);
+      r.hidden = !(okTerm && okCat);
+    });
+  }
+  function numOrNull(v) { return v === "" || v == null ? null : parseFloat(v); }
+  function sortRows() {
+    var mode = sortSel.value;
+    var sorted = rows.slice().sort(function (a, b) {
+      if (mode === "price_desc" || mode === "price_asc") {
+        var av = numOrNull(a.dataset.price), bv = numOrNull(b.dataset.price);
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;   // missing price always sorts last
+        if (bv === null) return -1;
+        return mode === "price_desc" ? bv - av : av - bv;
+      }
+      if (mode === "listings_desc") {
+        return (parseInt(b.dataset.listings, 10) || 0) - (parseInt(a.dataset.listings, 10) || 0);
+      }
+      return a.dataset.name.localeCompare(b.dataset.name);
+    });
+    sorted.forEach(function (r) { list.appendChild(r); });
+  }
+  search.addEventListener("input", apply);
+  chips.addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-cat]");
+    if (!b) return;
+    cat = b.dataset.cat;
+    chips.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    apply();
+  });
+  sortSel.addEventListener("change", sortRows);
+})();
+</script>
+{% endblock %}
+
+{% block slideovers %}
+{% for q in queries %}{{ qeditor(q, categories, stats) }}{% endfor %}
+{{ qeditor(none, categories, stats) }}
+{% endblock %}

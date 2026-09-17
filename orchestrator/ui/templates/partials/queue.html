@@ -1,0 +1,52 @@
+{% from "_macros.html" import hint %}
+<div class="vitals" id="vitals-panel"
+     hx-get="{{ url_for('ui.partial_queue') }}" hx-trigger="every 5s" hx-swap="outerHTML">
+  <div class="vital">
+    <span class="lbl">Queue depth</span>
+    <span class="val tnum">{{ vitals.queue_depth }}</span>
+    <span class="meta">
+      {% if vitals.redis_error %}<span class="pill pill--crit"><i class="dot"></i>redis down</span>
+      {% elif vitals.queue_depth == 0 %}<span class="pill pill--ok"><i class="dot"></i>drained</span>
+      {% else %}<span class="pill pill--warn"><i class="dot"></i>{{ vitals.queue_pending }} claimed</span>{% endif %}
+    </span>
+    <span class="spark flat" data-spark="{{ vitals.queue_depth }},{{ vitals.queue_pending }},{{ vitals.queue_depth }}"></span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Active workers {{ hint("Sum of running / desired replicas across all provisioned nodes. Below desired means a node is still spinning up or a provider is constrained.") }}</span>
+    <span class="val tnum">{{ vitals.workers_up }}<small> / {{ vitals.workers_desired }}</small></span>
+    <span class="meta">
+      {% if vitals.workers_desired and vitals.workers_up < vitals.workers_desired %}<span class="pill pill--warn"><i class="dot"></i>{{ vitals.workers_desired - vitals.workers_up }} spinning up</span>
+      {% elif vitals.workers_up %}<span class="pill pill--ok"><i class="dot"></i>at capacity</span>
+      {% else %}<span class="pill pill--crit"><i class="dot"></i>none running</span>{% endif %}
+    </span>
+    <span class="spark {{ 'warn' if vitals.workers_up < vitals.workers_desired else 'ok' }}"
+          data-spark="{{ vitals.workers_desired }},{{ vitals.workers_up }},{{ vitals.workers_up }}"></span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Jobs · 24h {{ hint("Every job created in the last 24h, split by its current result.") }}</span>
+    <span class="val tnum">{{ vitals.jobs_24h }}</span>
+    <span class="meta jobsplit">
+      {% set shown = vitals.jobs_split | selectattr('count', 'gt', 0) | list %}
+      {% if shown %}
+        {% for j in shown %}{% if not loop.first %} · {% endif %}<b class="{{ j.level or '' }}">{{ j.count }}</b> {{ j.status }}{% endfor %}
+      {% else %}<span>none yet</span>{% endif %}
+    </span>
+    <span class="spark ok" data-spark="{{ vitals.jobs_24h }}"></span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Observations stored</span>
+    <span class="val tnum">{{ '{:,}'.format(vitals.obs_total) }}</span>
+    <span class="meta">daily price buckets</span>
+    <span class="spark" data-spark="{{ vitals.obs_spark | join(',') if vitals.obs_spark else vitals.obs_total }}"></span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Data freshness {{ hint("Time since the most recent job result was ingested.") }}</span>
+    <span class="val">{{ (vitals.freshness | reltime).replace(' ago','') if vitals.freshness else '—' }}</span>
+    <span class="meta">
+      {% if vitals.deadletter %}<span class="pill pill--crit"><i class="dot"></i>{{ vitals.deadletter }} dead-letter</span>
+      {% elif vitals.freshness %}<span class="pill pill--ok"><i class="dot"></i>fresh</span>
+      {% else %}<span class="pill"><i class="dot"></i>no results yet</span>{% endif %}
+    </span>
+    <span class="spark {{ 'ok' if not vitals.deadletter else 'warn' }}" data-spark="1,1,1"></span>
+  </div>
+</div>

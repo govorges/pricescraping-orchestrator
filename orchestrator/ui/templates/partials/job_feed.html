@@ -1,0 +1,5 @@
+{% from "_macros.html" import job_feed %}
+<div id="jobfeed-panel"
+     hx-get="{{ url_for('ui.partial_job_feed') }}" hx-trigger="every 8s" hx-swap="outerHTML">
+  {{ job_feed(jobs, vmap, qmap) }}
+</div>

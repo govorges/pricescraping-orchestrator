@@ -1,0 +1,5 @@
+{% from "_macros.html" import node_rows %}
+<table>
+  <thead><tr><th>Node</th><th>Status</th><th>Running / Desired</th><th>Image</th><th>Last seen</th></tr></thead>
+  <tbody>{{ node_rows(nodes) }}</tbody>
+</table>
