@@ -24,7 +24,18 @@
     var pts = (el.dataset.spark || "").split(",").map(Number).filter(function (n) { return !isNaN(n); });
     if (pts.length < 2) { el.innerHTML = ""; return; }
     var w = 140, h = 34, p = 3;
-    var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts), rng = (max - min) || 1;
+    var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+    // Price sparklines (.qspark) must not blow small moves up to full height: pad
+    // the range to at least MIN_SPAN of the peak price, centred, so a 5% dip reads
+    // as ~5% of the span rather than a cliff. Count sparklines keep min..max.
+    if (el.classList.contains("qspark") && max > 0) {
+      var MIN_SPAN = 0.4, need = max * MIN_SPAN;
+      if (max - min < need) {
+        var mid = (max + min) / 2;
+        min = mid - need / 2; max = mid + need / 2;
+      }
+    }
+    var rng = (max - min) || 1;
     var X = function (i) { return p + i * (w - 2 * p) / (pts.length - 1); };
     var Y = function (v) { return h - p - (v - min) / rng * (h - 2 * p); };
     var line = pts.map(function (v, i) { return (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1); }).join(" ");
@@ -62,6 +73,13 @@
     if (opts.ref != null) flat.push(opts.ref);
     if (!flat.length) { showEmpty(); return; }
     var lo = Math.min.apply(null, flat), hi = Math.max.apply(null, flat);
+    // Don't auto-zoom onto tiny moves: keep the visible range at least MIN_SPAN of
+    // the peak price (centred), so a 5% change reads as ~5%, not a full-height swing.
+    var MIN_SPAN = 0.4, need = hi * MIN_SPAN;
+    if (hi > 0 && hi - lo < need) {
+      var mid = (hi + lo) / 2;
+      lo = mid - need / 2; hi = mid + need / 2;
+    }
     var pad = (hi - lo) * 0.15 || Math.max(1, hi * 0.05);
     lo -= pad; hi += pad;
     var n = series[0].points.length;
