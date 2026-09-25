@@ -1,0 +1,113 @@
+{% from "_macros.html" import phrase_list %}
+{# The query object ("product") form fields, shared by the New product
+   slide-over on the list page and the product's Settings tab. #}
+
+{% macro band_pct(v, smax) %}{{ ((v / smax * 100) if smax else 0) | round(1) }}{% endmacro %}
+
+{% macro product_fields(q, categories, s) %}
+{% set edit = q is not none %}
+{% set smax = ([ (q.maximum_value if edit and q.maximum_value is not none else 0),
+                 ((s.mean_max if s else 0) or 0) * 1.35,
+                 ((q.minimum_value if edit else 0) or 0) * 2, 1000 ] | max) | round(-2, 'ceil') | int %}
+      {% if not edit %}
+      <div class="field">
+        <label>ID <span class="opt">— permanent key</span></label>
+        <input name="id" required pattern="[a-zA-Z0-9_.:@+~-]+" placeholder="gpu-rtx-5090" autofocus>
+      </div>
+      {% endif %}
+
+      <div class="field">
+        <label>Search phrase</label>
+        <input name="content" value="{{ q.content if edit else '' }}" placeholder="RTX 5090">
+        <span class="help">Sent to each vendor, and required in every kept listing title.</span>
+      </div>
+
+      <div class="field">
+        <label>Include <span class="opt">— all must appear</span></label>
+        <div class="chips" data-chipeditor="#inc-{{ q.id if edit else 'new' }}">
+          {% for p in (q.include if edit else []) %}
+          <span class="chip" data-val="{{ p }}">{{ p }} <button type="button" aria-label="Remove {{ p }}">×</button></span>
+          {% endfor %}
+          <input class="chip-input" type="text" placeholder="add phrase…" aria-label="Add include phrase">
+        </div>
+        <textarea name="include" id="inc-{{ q.id if edit else 'new' }}" hidden>{{ (q.include if edit else []) | join('\n') }}</textarea>
+      </div>
+
+      <div class="field">
+        <label>Exclude <span class="opt">— drop if any appears</span></label>
+        <div class="chips" data-chipeditor="#exc-{{ q.id if edit else 'new' }}" data-chip-class="exc">
+          {% for p in (q.exclude if edit else []) %}
+          <span class="chip exc" data-val="{{ p }}">{{ p }} <button type="button" aria-label="Remove {{ p }}">×</button></span>
+          {% endfor %}
+          <input class="chip-input" type="text" placeholder="add phrase…" aria-label="Add exclude phrase">
+        </div>
+        <textarea name="exclude" id="exc-{{ q.id if edit else 'new' }}" hidden>{{ (q.exclude if edit else []) | join('\n') }}</textarea>
+        {% if edit and q.category %}
+          {% set cat_excl = q.effective_exclude() | reject("in", q.exclude) | list %}
+          {% if cat_excl %}
+          <details class="excollapse" style="margin-top:8px">
+            <summary>+{{ cat_excl | length }} more from <b>{{ q.category.name or q.category.id }}</b></summary>
+            <div class="chips">{% for p in cat_excl %}<span class="chip from-cat">{{ p }}</span>{% endfor %}</div>
+          </details>
+          {% endif %}
+        {% endif %}
+      </div>
+
+      <div class="field">
+        <label>Price band</label>
+        <div class="band" data-scale-max="{{ smax }}"
+             data-min="{{ q.minimum_value or 0 if edit else 0 }}"
+             data-max="{{ (q.maximum_value if q.maximum_value is not none else '') if edit else '' }}">
+          <div class="band-track">
+            <div class="rail"></div>
+            {% if s and s.low_min is not none and s.mean_max is not none %}
+            <div class="band-observed" style="left:{{ band_pct(s.low_min, smax) }}%;right:{{ 100 - (band_pct(s.mean_max, smax) | float) }}%"></div>
+            {% endif %}
+            <div class="band-range"></div>
+            <button class="band-handle" type="button" data-role="min" aria-label="Minimum price"></button>
+            <button class="band-handle" type="button" data-role="max" aria-label="Maximum price"></button>
+          </div>
+          <div class="band-scale"><span>$0</span><span>${{ '{:,}'.format((smax // 2)) }}</span><span>${{ '{:,}'.format(smax) }}</span></div>
+          <div class="band-out">
+            <span class="v"><small>min </small><output data-out="min"></output></span>
+            <span class="v"><small>max </small><output data-out="max"></output></span>
+          </div>
+          <input type="hidden" name="minimum_value" data-field="min" value="{{ q.minimum_value or 0 if edit else 0 }}">
+          <input type="hidden" name="maximum_value" data-field="max" value="{{ (q.maximum_value if q.maximum_value is not none else '') if edit else '' }}">
+          {% if s and s.low_min is not none %}<span class="help">Shaded band = observed ${{ s.low_min | round | int }}–${{ s.mean_max | round | int }} across {{ s.observations }} runs.</span>{% endif %}
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Category</label>
+        <select name="category_id">
+          <option value="">— none —</option>
+          {% for c in categories %}
+          <option value="{{ c.id }}" {{ 'selected' if edit and q.category_id == c.id }}>{{ c.name or c.id }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      {% if edit %}
+      {% set lo, hi = q.effective_band() %}
+      <div class="preview">
+        <p>Effective filter — query + category</p>
+        <div class="kv"><span>Exclude</span><span>{{ phrase_list(q.effective_exclude()) }}</span></div>
+        <div class="kv"><span>Price band</span><span>${{ lo | round | int }} – {{ ('$' ~ (hi | round | int)) if hi is not none else 'no cap' }}
+          {%- if q.category and (lo != (q.minimum_value or 0) or hi != q.maximum_value) %} <span class="muted">(narrowed by category)</span>{% endif %}</span></div>
+      </div>
+
+      <div class="note">
+        <p style="margin-bottom:.35rem"><b>Apply excludes to existing listings</b></p>
+        <p class="help">
+          Exclude phrases only filter <em>future</em> scrapes. This hides any currently-active tracked
+          listing for this query whose title now matches its effective exclude list above.
+        </p>
+        <button type="submit" class="btn ghost sm" formnovalidate
+                formaction="{{ url_for('ui.apply_query_excludes', qid=q.id) }}"
+                onclick="return confirm('Hide existing listings for {{ q.id }} that match its exclude phrases?\n\nThis only hides matches — it does not delete anything, and hidden listings can be unhidden later.')">
+          Apply now
+        </button>
+      </div>
+      {% endif %}
+{% endmacro %}

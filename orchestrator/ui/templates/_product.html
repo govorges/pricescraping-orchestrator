@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{# Shared frame for a product's tabs (Overview / Listings / Settings): the
+   breadcrumb, identity line and tab strip. Children fill `tab`. #}
+{% set lo, hi = q.effective_band() %}
+{% block heading %}{{ q.content or q.id }}{% endblock %}
+
+{% block body %}
+<div class="product-head">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('products.products_list') }}">Products</a>
+    {% if q.category %}<span>/</span><a href="{{ url_for('products.products_list', category_id=q.category_id) }}">{{ q.category.name or q.category.id }}</a>{% endif %}
+  </nav>
+  <span class="mono">{{ q.id }}</span>
+  <span class="muted">band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}</span>
+  {% if product.schedules_enabled %}
+    <span class="pill pill--ok"><i class="dot"></i>scheduled · {{ product.schedules_enabled }}</span>
+  {% else %}
+    <span class="pill pill--warn"><i class="dot"></i>not scheduled</span>
+  {% endif %}
+</div>
+
+<nav class="ptabs" aria-label="Product sections">
+  <a href="{{ url_for('products.overview', qid=q.id) }}" {{ 'aria-current=page' if tab == 'overview' }}>Overview</a>
+  <a href="{{ url_for('products.listings', qid=q.id) }}" {{ 'aria-current=page' if tab == 'listings' }}>Listings <span class="ct">{{ product.active_listings }}</span></a>
+  <a href="{{ url_for('products.settings', qid=q.id) }}" {{ 'aria-current=page' if tab == 'settings' }}>Settings</a>
+</nav>
+
+{% block tab %}{% endblock %}
+{% endblock %}

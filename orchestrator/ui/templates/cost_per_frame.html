@@ -136,7 +136,7 @@
       <tr>
         <td><b>{{ r.gpu }}</b></td>
         <td>{% if r.brand %}<i class="cpf-swatch brand-{{ r.brand }}"></i>{{ brands[r.brand] }}{% else %}—{% endif %}</td>
-        <td><a href="{{ url_for('insights.insight_detail', qid=r.query_id) }}">{{ r.query }}</a></td>
+        <td><a href="{{ url_for('products.overview', qid=r.query_id) }}">{{ r.query }}</a></td>
         <td class="num tnum">${{ '{:,.2f}'.format(r.price) }}</td>
         <td class="muted">{{ r.observed_at | reltime if r.observed_at else '—' }}</td>
         <td class="num tnum">{{ r.fps }}</td>

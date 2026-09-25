@@ -1,0 +1,68 @@
+{% extends "_product.html" %}
+{% from "_macros.html" import hint, vendor_tip %}
+{% from "_product_form.html" import product_fields %}
+{% block title %}Settings · {{ q.content or q.id }}{% endblock %}
+
+{% block tab %}
+<div class="row split">
+  <form class="panel" method="post" action="{{ url_for('ui.update_query', qid=q.id) }}">
+    <header><h2>What to search for</h2></header>
+    <div class="form-stack">
+      {{ product_fields(q, categories, stats) }}
+      <div class="form-actions">
+        <button type="submit" class="btn">Save changes</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="stack">
+    <div class="panel">
+      <header>
+        <h2>Schedules</h2>
+        <span class="sub">what runs this product</span>
+        <div class="right"><a class="btn ghost sm" href="{{ url_for('ui.schedules') }}">Add schedule</a></div>
+      </header>
+      <table>
+        <thead><tr><th>Vendor</th><th>Cron <span class="subid">UTC</span></th><th>Next run</th><th></th></tr></thead>
+        <tbody>
+        {% for s in schedules %}
+          <tr>
+            <td>{{ vendor_tip(s.vendor_id, vmap) }}{% if not s.enabled %} <span class="badge canceled">off</span>{% endif %}</td>
+            <td class="mono" style="white-space:nowrap">{{ s.cron }}</td>
+            <td class="muted">{{ s.next_run_at | reltime if s.enabled and s.next_run_at else '—' }}</td>
+            <td class="num">
+              <form method="post" action="{{ url_for('ui.run_schedule', sid=s.id) }}">
+                <input type="hidden" name="next" value="{{ request.path }}">
+                <button class="btn ghost sm" type="submit">Run now</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+        {% for cs in category_schedules %}
+          <tr>
+            <td>{{ vendor_tip(cs.vendor_id, vmap) if cs.vendor_id else 'All enabled vendors' }}
+              <span class="tag tag--cat" title="Set on the {{ cs.category.name or cs.category_id }} category">via {{ cs.category.name or cs.category_id }}</span>
+              {% if not cs.enabled %}<span class="badge canceled">off</span>{% endif %}</td>
+            <td class="mono" style="white-space:nowrap">{{ cs.cron }}</td>
+            <td class="muted">{{ cs.next_run_at | reltime if cs.enabled and cs.next_run_at else '—' }}</td>
+            <td class="num"><a class="btn ghost sm" href="{{ url_for('ui.schedules') }}">Edit</a></td>
+          </tr>
+        {% endfor %}
+        {% if not schedules and not category_schedules %}
+          <tr><td colspan="4" class="muted">Nothing runs this product yet. Add a schedule to start collecting prices.</td></tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <form class="panel" method="post" action="{{ url_for('ui.delete_query', qid=q.id) }}"
+          onsubmit="return confirm('Delete product {{ q.id }}? Schedules that use it will break.')">
+      <header><h2>Delete product</h2></header>
+      <p class="help" style="margin-bottom:10px">
+        Past listings and price history stay in the database. Delete this product's schedules first — they can't run without it.
+      </p>
+      <button type="submit" class="btn danger">Delete</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

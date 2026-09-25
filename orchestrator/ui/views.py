@@ -604,29 +604,8 @@ def _active_listing_counts(db) -> dict[str, int]:
 
 @bp.get("/queries")
 def queries():
-    db = get_db()
-    rows = db.scalars(select(QueryObject).order_by(QueryObject.id)).all()
-    stats = {q.id: _query_price_stats(db, q.id) for q in rows}
-    sparks = {q.id: _sparkline(db, q.id) for q in rows}
-    active_counts = _active_listing_counts(db)
-    run_state = {}
-    for q in rows:
-        last_job = db.scalars(
-            select(Job).where(Job.query_object_id == q.id).order_by(Job.created_at.desc()).limit(1)
-        ).first()
-        recent = db.scalars(
-            select(PriceObservation).where(PriceObservation.query_object_id == q.id)
-            .order_by(PriceObservation.observed_at.desc()).limit(2)
-        ).all()
-        run_state[q.id] = {
-            "job": last_job,
-            "zero_runs": len(recent) if recent and all((o.listings_kept or 0) == 0 for o in recent) else 0,
-        }
-    cats = db.scalars(select(Category).order_by(Category.id)).all()
-    return render_template(
-        "queries.html", queries=rows, stats=stats, sparks=sparks,
-        run_state=run_state, categories=cats, active_counts=active_counts,
-    )
+    """Old Query objects page -- now the Products list."""
+    return redirect(url_for("products.products_list"), code=301)
 
 
 def _apply_query_form(q: QueryObject) -> None:
@@ -644,21 +623,21 @@ def create_query():
     qid = (request.form.get("id") or "").strip()
     if not qid:
         flash("id is required", "error")
-        return redirect(url_for("ui.queries"))
+        return redirect(url_for("products.products_list"))
     if db.get(QueryObject, qid):
         flash(f"query object '{qid}' already exists", "error")
-        return redirect(url_for("ui.queries"))
+        return redirect(url_for("products.products_list"))
     q = QueryObject(id=qid)
     _apply_query_form(q)
     try:
         QuerySchema.model_validate(q.snapshot())
     except ValueError as exc:
         flash(f"invalid query object: {exc}", "error")
-        return redirect(url_for("ui.queries"))
+        return redirect(url_for("products.products_list"))
     db.add(q)
     db.commit()
-    flash(f"query object '{qid}' created", "ok")
-    return redirect(url_for("ui.queries"))
+    flash(f"product '{qid}' created -- add a schedule to start collecting prices", "ok")
+    return redirect(url_for("products.settings", qid=qid))
 
 
 @bp.post("/queries/<qid>/update")
@@ -666,17 +645,17 @@ def update_query(qid: str):
     db = get_db()
     q = db.get(QueryObject, qid)
     if q is None:
-        flash("query object not found", "error")
-        return redirect(url_for("ui.queries"))
+        flash("product not found", "error")
+        return redirect(url_for("products.products_list"))
     _apply_query_form(q)
     try:
         QuerySchema.model_validate(q.snapshot())
     except ValueError as exc:
         flash(f"invalid query object: {exc}", "error")
-        return redirect(url_for("ui.queries"))
+        return redirect(url_for("products.settings", qid=qid))
     db.commit()
-    flash(f"query object '{qid}' updated", "ok")
-    return redirect(url_for("ui.queries"))
+    flash("changes saved", "ok")
+    return redirect(url_for("products.settings", qid=qid))
 
 
 @bp.post("/queries/<qid>/delete")
@@ -686,8 +665,8 @@ def delete_query(qid: str):
     if q:
         db.delete(q)
         db.commit()
-        flash(f"query object '{qid}' deleted", "ok")
-    return redirect(url_for("ui.queries"))
+        flash(f"product '{qid}' deleted", "ok")
+    return redirect(url_for("products.products_list"))
 
 
 @bp.post("/queries/<qid>/apply-excludes")
@@ -697,12 +676,12 @@ def apply_query_excludes(qid: str):
     db = get_db()
     q = db.get(QueryObject, qid)
     if q is None:
-        flash("query object not found", "error")
-        return redirect(url_for("ui.queries"))
+        flash("product not found", "error")
+        return redirect(url_for("products.products_list"))
     n = apply_excludes_to_query(db, q)
     db.commit()
     flash(f"hid {n} existing listing(s) for '{qid}' matching its exclude phrases", "ok")
-    return redirect(url_for("ui.queries"))
+    return redirect(url_for("products.settings", qid=qid))
 
 
 TRACKED_LISTING_SORTS = {
@@ -748,71 +727,8 @@ def _annotate_activity(rows, runs_by_vendor: dict[str, list]) -> None:
 
 @bp.get("/queries/<qid>/listings")
 def query_listings(qid: str):
-    db = get_db()
-    q = db.get(QueryObject, qid)
-    if q is None:
-        flash("query object not found", "error")
-        return redirect(url_for("ui.queries"))
-
-    stmt = select(TrackedListing).where(TrackedListing.query_object_id == qid)
-    if vendor := request.args.get("vendor_id"):
-        stmt = stmt.where(TrackedListing.vendor_id == vendor)
-    if listing_type := request.args.get("listing_type"):
-        stmt = stmt.where(TrackedListing.listing_type == listing_type)
-    show = request.args.get("show", "visible")
-    if show == "visible":
-        stmt = stmt.where(~TrackedListing.hidden)
-    elif show == "hidden":
-        stmt = stmt.where(TrackedListing.hidden)
-    order = TRACKED_LISTING_SORTS.get(request.args.get("sort", "last_seen"),
-                                      TRACKED_LISTING_SORTS["last_seen"])
-    rows = list(db.scalars(stmt.order_by(order).limit(500)).all())
-
-    runs_by_vendor = _run_times_by_vendor(db, qid)
-    _annotate_activity(rows, runs_by_vendor)
-
-    status = request.args.get("status", "all")
-    if status == "active":
-        rows = [t for t in rows if t.active]
-    elif status == "inactive":
-        rows = [t for t in rows if not t.active]
-
-    hide_counts = dict(
-        db.execute(
-            select(TrackedListing.hidden, func.count())
-            .where(TrackedListing.query_object_id == qid)
-            .group_by(TrackedListing.hidden)
-        ).all()
-    )
-    all_rows = db.scalars(
-        select(TrackedListing).where(TrackedListing.query_object_id == qid,
-                                     ~TrackedListing.hidden)
-    ).all()
-    _annotate_activity(all_rows, runs_by_vendor)
-    counts = {
-        "visible": hide_counts.get(False, 0),
-        "hidden": hide_counts.get(True, 0),
-        "active": sum(1 for t in all_rows if t.active),
-        "inactive": sum(1 for t in all_rows if not t.active),
-    }
-    vendors_used = sorted(
-        {
-            vid
-            for (vid,) in db.execute(
-                select(TrackedListing.vendor_id)
-                .where(TrackedListing.query_object_id == qid).distinct()
-            ).all()
-        }
-    )
-    return render_template(
-        "listings.html",
-        query=q,
-        rows=rows,
-        vmap=_vendor_map(db),
-        vendors_used=vendors_used,
-        counts=counts,
-        args=request.args,
-    )
+    """Old per-query listings page -- now the product's Listings tab."""
+    return redirect(url_for("products.listings", qid=qid, **request.args), code=301)
 
 
 @bp.post("/tracked/<int:tracked_id>/hide")
@@ -1013,7 +929,15 @@ def run_schedule(sid: int):
         flash(f"queued job {job_id}", "ok")
     except Exception as exc:  # noqa: BLE001
         flash(f"enqueue failed: {exc}", "error")
-    return redirect(url_for("ui.schedules"))
+    return redirect(_local_next() or url_for("ui.schedules"))
+
+
+def _local_next() -> str | None:
+    """The form's ``next`` field when it is a path on this site, so a button
+    can send the user back where they pressed it without opening a redirect
+    to anywhere else."""
+    nxt = request.form.get("next") or ""
+    return nxt if nxt.startswith("/") and not nxt.startswith("//") else None
 
 
 def _reload_scheduler() -> None:

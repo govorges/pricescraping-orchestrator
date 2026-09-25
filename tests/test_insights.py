@@ -73,33 +73,36 @@ def test_sort_leaderboard_price_desc():
     assert ordered == ["b", "a", "c"]  # missing price sorts last even descending
 
 
-def test_insights_home_page_renders(client):
-    """The leaderboard page loads and lists a known query object."""
+def test_products_page_renders(client):
+    """The Products list (which replaced the Insights leaderboard) loads and lists a known query object."""
     _seed_basic()
-    r = client.get("/insights")
+    r = client.get("/products")
     assert r.status_code == 200
     assert b"gpu-rtx-5090" in r.data
 
 
-def test_insights_home_filters_by_category(client):
-    """The ?category_id= query param filters the rendered leaderboard, not just the underlying data function."""
+def test_old_insights_pages_redirect_to_products(client):
+    """/insights and /insights/<qid> are permanent redirects to their Products equivalents, keeping the category filter."""
     _seed_basic()
     r = client.get("/insights?category_id=gpu")
-    assert r.status_code == 200
-    assert b"cpu-9800x3d" not in r.data
+    assert r.status_code == 301
+    assert r.headers["Location"].endswith("/products?category_id=gpu")
+    r = client.get("/insights/gpu-rtx-5090")
+    assert r.status_code == 301
+    assert r.headers["Location"].endswith("/products/gpu-rtx-5090")
 
 
-def test_insight_detail_renders_with_zero_observations(client):
+def test_product_overview_renders_with_zero_observations(client):
     """Regression: a query with no PriceObservation rows must not 500 --
     stats comes back as {} and every template access needs to survive that."""
     _seed_basic()
-    r = client.get("/insights/cpu-9800x3d")
+    r = client.get("/products/cpu-9800x3d")
     assert r.status_code == 200
     assert b"no observations yet" in r.data
 
 
-def test_insight_detail_renders_with_history(client):
-    """With real observations and a tracked listing present, the detail page renders the vendor's data."""
+def test_product_overview_renders_with_history(client):
+    """With real observations and a tracked listing present, the Overview tab renders the vendor's data."""
     _seed_basic()
     now = datetime.now(timezone.utc)
     with session_scope() as db:
@@ -111,15 +114,15 @@ def test_insight_detail_renders_with_history(client):
         )
         db.add(t)
 
-    r = client.get("/insights/gpu-rtx-5090")
+    r = client.get("/products/gpu-rtx-5090")
     assert r.status_code == 200
-    assert r.data.count(b"eBay US".replace(b" ", b"")) >= 0  # vendor id shown, not name here
     assert b"usa_ebay" in r.data
+    assert b"Recent runs" in r.data
 
 
-def test_insight_detail_404_for_unknown_query(client):
+def test_product_overview_404_for_unknown_query(client):
     """A query id that doesn't exist is a 404, not a rendered page with empty/garbage data."""
-    r = client.get("/insights/does-not-exist")
+    r = client.get("/products/does-not-exist")
     assert r.status_code == 404
 
 

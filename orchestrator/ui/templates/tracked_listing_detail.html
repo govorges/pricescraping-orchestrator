@@ -3,7 +3,7 @@
 {% block title %}{{ t.title or 'Tracked listing' }}{% endblock %}
 {% block heading %}Listing detail{% endblock %}
 {% block action %}
-  <a class="btn ghost" href="{{ url_for('ui.tracked_listings') }}">← All tracked listings</a>
+  <a class="btn ghost" href="{{ url_for('ui.tracked_listings') }}">← Listings</a>
 {% endblock %}
 
 {% block body %}
@@ -14,7 +14,7 @@
     {% elif t.listing_type == 'buy_now' %}<span class="badge buy_now">buy it now</span>
     {% else %}<span class="badge unknown">type unknown</span>{% endif %}
     <span class="tag">{{ vendor_tip(t.vendor_id, vmap) }}</span>
-    <span class="tag tag--cat">{{ query_tip(t.query_object_id, qmap) }}</span>
+    <a class="tag tag--cat" href="{{ url_for('products.listings', qid=t.query_object_id) }}">{{ query_tip(t.query_object_id, qmap) }}</a>
     {% if t.link %}<a class="btn ghost sm" style="margin-left:auto" href="{{ t.link }}" target="_blank" rel="noopener">Open listing ↗</a>{% endif %}
   </div>
   <div class="url">canonical · <b>{{ t.canonical_url }}</b>

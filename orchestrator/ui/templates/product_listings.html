@@ -1,19 +1,15 @@
-{% extends "base.html" %}
+{% extends "_product.html" %}
 {% from "_macros.html" import hint, vendor_tip %}
-{% block title %}Listings · {{ query.content or query.id }}{% endblock %}
-{% block heading %}Listings{% endblock %}
-{% block action %}
-  <a class="btn ghost" href="{{ url_for('ui.queries') }}">← All query objects</a>
-{% endblock %}
+{% block title %}Listings · {{ q.content or q.id }}{% endblock %}
 
-{% block body %}
+{% block tab %}
 <p class="pagelead">
-  Every distinct listing found for <b>{{ query.content or query.id }}</b>, one row each — price and
-  activity followed across scrape runs.
+  Every distinct listing found for this product, one row each — price and activity followed across
+  runs.
   {{ hint("Identity is the listing URL with session/tracking args stripped. A listing missing from its vendor's latest clean run is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it, since they prove nothing about what's still listed. Hiding only affects this page; it does not touch stored metrics.") }}
 </p>
 
-<form class="toolbar" method="get" action="{{ url_for('ui.query_listings', qid=query.id) }}">
+<form class="toolbar" method="get" action="{{ url_for('products.listings', qid=q.id) }}">
   <label>Status
     <select name="status" onchange="this.form.submit()">
       <option value="all" {{ 'selected' if args.get('status', 'all') == 'all' }}>All ({{ counts.active + counts.inactive }})</option>

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_macros.html" import hint, vendor_tip, query_tip %}
-{% block title %}Tracked listings{% endblock %}
-{% block heading %}Tracked listings{% endblock %}
+{% block title %}Listings{% endblock %}
+{% block heading %}Listings{% endblock %}
 {% block body %}
 <p class="pagelead">
-  One row per real-world listing, recognised across scrapes by its URL with session/tracking args stripped.
+  Every listing across all products, one row per real-world listing, recognised across scrapes by its URL with session/tracking args stripped.
   {{ hint("A listing missing from its vendor's latest clean run for that query is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it.") }}
 </p>
 
@@ -66,7 +66,7 @@
         {% if not t.active %}<span class="badge canceled" title="not in the last {{ t.runs_missed }} run(s)">ended</span>{% endif %}
       </td>
       <td>{{ vendor_tip(t.vendor_id, vmap) }}</td>
-      <td>{{ query_tip(t.query_object_id, qmap) }}</td>
+      <td><a href="{{ url_for('products.overview', qid=t.query_object_id) }}">{{ query_tip(t.query_object_id, qmap) }}</a></td>
       <td>
         {% if t.listing_type == 'auction' %}<span class="badge auction">auction</span>
         {% elif t.listing_type == 'buy_now' %}<span class="badge buy_now">buy it now</span>

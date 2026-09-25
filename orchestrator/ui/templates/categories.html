@@ -118,7 +118,7 @@
       <td class="num">{{ c.queries | length }}</td>
       <td>
         <div class="rowact">
-          <a class="kebab" href="{{ url_for('insights.insights_home', category_id=c.id) }}" aria-label="Insights for {{ c.id }}" title="Insights">
+          <a class="kebab" href="{{ url_for('products.products_list', category_id=c.id) }}" aria-label="Products in {{ c.id }}" title="Products in this category">
             <svg viewBox="0 0 24 24"><rect x="4" y="12" width="4" height="8" rx="1"/><rect x="10" y="7" width="4" height="13" rx="1"/><rect x="16" y="3" width="4" height="17" rx="1"/></svg>
           </a>
           <button class="kebab" type="button" data-slideover="cat-editor-{{ c.id }}" aria-label="Edit {{ c.id }}">

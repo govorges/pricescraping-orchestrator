@@ -1,20 +1,9 @@
-{% extends "base.html" %}
+{% extends "_product.html" %}
 {% from "_macros.html" import hint, status_badge, vendor_tip %}
-{% set lo, hi = q.effective_band() %}
 {% set latest = stats.get('latest') if stats else none %}
-{% block title %}{{ q.content or q.id }} · Insights{% endblock %}
-{% block heading %}{{ q.content or q.id }}{% endblock %}
-{% block action %}
-  <a class="btn ghost" href="{{ url_for('insights.insights_home') }}">← All insights</a>
-{% endblock %}
+{% block title %}{{ q.content or q.id }}{% endblock %}
 
-{% block body %}
-<p class="pagelead">
-  <span class="mono">{{ q.id }}</span>
-  {% if q.category %} · <span class="tag tag--cat">{{ q.category.name or q.category.id }}</span>{% endif %}
-  · band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}
-</p>
-
+{% block tab %}
 {% set by_vendor = stats.get('by_vendor') if stats else [] %}
 {% if by_vendor | length > 1 %}
 <div class="filter-chips" id="vendorFilter" style="margin-bottom:14px">
@@ -102,7 +91,7 @@
 </div>
 
 <div class="panel" style="margin-top:20px">
-  <header><h2>Recent observations</h2><span class="sub">last {{ history_rows | length }}</span></header>
+  <header><h2>Recent runs</h2><span class="sub">last {{ history_rows | length }} · each run is one scrape at one vendor</span></header>
   <div class="scroll-y"><table>
     <thead><tr>
       <th>Date <span class="subid">UTC</span></th><th>Vendor</th><th>Status</th>
@@ -118,7 +107,7 @@
         <td class="num tnum">{% if o.price_mean is not none %}${{ o.price_mean | round | int }}{% else %}—{% endif %}</td>
         <td class="num tnum">{% if o.price_median is not none %}${{ o.price_median | round | int }}{% else %}—{% endif %}</td>
         <td class="num tnum">{{ o.listings_kept }}</td>
-        <td><a class="mono" href="{{ url_for('ui.job_detail', job_id=o.job_id) }}">{{ o.job_id[:8] }}</a></td>
+        <td class="num"><a href="{{ url_for('ui.job_detail', job_id=o.job_id) }}" title="{{ o.job_id }}">Open run</a></td>
       </tr>
     {% else %}
       <tr><td colspan="8" class="muted">no observations yet</td></tr>

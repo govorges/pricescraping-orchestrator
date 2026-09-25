@@ -1,9 +1,6 @@
-"""Query-object analytics: a cross-query leaderboard, a per-query deep-dive,
-and CSV/JSON export of both.
-
-Kept as its own blueprint rather than folded into the already-large
-``orchestrator.ui.views`` -- this is a self-contained feature area sharing
-that module's DB session, templates, and a couple of its stat helpers.
+"""Query-object analytics: the cross-query leaderboard and per-query stats
+behind the Products pages (:mod:`orchestrator.ui.products`), and CSV/JSON
+export of both. The old ``/insights`` pages now redirect to Products.
 """
 
 from __future__ import annotations
@@ -14,7 +11,7 @@ import json
 import statistics
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, Response, abort, render_template, request
+from flask import Blueprint, Response, abort, redirect, request, url_for
 from sqlalchemy import func, select
 
 from orchestrator import get_db
@@ -179,29 +176,15 @@ def _query_insights(db, q: QueryObject) -> dict:
 
 @bp.get("/insights")
 def insights_home():
-    db = get_db()
+    """Old leaderboard -- now the Products list."""
     category_id = request.args.get("category_id") or None
-    sort = request.args.get("sort", "content")
-    rows = _sort_leaderboard(_leaderboard(db, category_id), sort)
-    return render_template(
-        "insights.html",
-        rows=rows,
-        categories=db.scalars(select(Category).order_by(Category.id)).all(),
-        category_id=category_id,
-        sort=sort,
-        args=request.args,
-    )
+    return redirect(url_for("products.products_list", category_id=category_id), code=301)
 
 
 @bp.get("/insights/<qid>")
 def insight_detail(qid: str):
-    db = get_db()
-    q = db.get(QueryObject, qid)
-    if q is None:
-        abort(404)
-    return render_template(
-        "insight_detail.html", q=q, vmap=_vendor_map(db), **_query_insights(db, q)
-    )
+    """Old per-query deep-dive -- now the product's Overview tab."""
+    return redirect(url_for("products.overview", qid=qid), code=301)
 
 
 # ---- export -------------------------------------------------------------

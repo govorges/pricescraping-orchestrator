@@ -2,8 +2,8 @@
 {% from "_macros.html" import hint %}
 {% block title %}Overview{% endblock %}
 {% block action %}
-  <a class="btn" href="{{ url_for('ui.queries') }}">
-    <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New query object</span>
+  <a class="btn" href="{{ url_for('products.products_list') }}">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4-4"/></svg><span>Products</span>
   </a>
 {% endblock %}
 
