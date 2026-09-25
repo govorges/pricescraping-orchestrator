@@ -121,3 +121,40 @@ def test_ingest_records_status_and_error(client, status):
         assert job.status == status
         if status == "error":
             assert job.error_type == "ChallengePage"
+
+
+def _with_listings(listings, job_id="00000000-0000-0000-0000-0000000000a1"):
+    return {**RESULT, "job_id": job_id, "listings": listings}
+
+
+def test_ingest_price_low_skips_auction_listings(client):
+    """price_low is the cheapest non-auction listing: a lower current bid on an auction doesn't count, whatever the worker reported."""
+    payload = _with_listings([
+        {"title": "RTX 5090 - 3 bids", "link": "https://www.ebay.com/itm/1", "price": 900.0,
+         "extra": {"subtitle": "Time left 2d 4h"}},
+        {"title": "RTX 5090 Buy It Now", "link": "https://www.ebay.com/itm/2", "price": 2100.0, "extra": {}},
+        {"title": "RTX 5090 Founders Edition", "link": "https://www.ebay.com/itm/3", "price": 2050.0, "extra": {}},
+    ])
+    assert client.post(PATH, json=payload, headers=AUTH).status_code == 202
+    with session_scope() as db:
+        obs = db.query(PriceObservation).one()
+        assert obs.price_low == 2050.0
+        # the auction is still stored as a listing -- only the low-price figure skips it
+        assert db.query(Listing).filter(Listing.listing_type == "auction").count() == 1
+
+
+def test_ingest_price_low_none_when_only_auctions(client):
+    """A run that found only auctions has no buyable low price, rather than falling back to a bid."""
+    payload = _with_listings([
+        {"title": "RTX 5090 auction", "link": "https://www.ebay.com/itm/1", "price": 900.0, "extra": {"bids": "5 bids"}},
+    ])
+    assert client.post(PATH, json=payload, headers=AUTH).status_code == 202
+    with session_scope() as db:
+        assert db.query(PriceObservation).one().price_low is None
+
+
+def test_ingest_price_low_falls_back_to_worker_metric_without_listings(client):
+    """With no listings in the result there's nothing to filter, so the worker's reported price_low is kept."""
+    assert client.post(PATH, json=_with_listings([]), headers=AUTH).status_code == 202
+    with session_scope() as db:
+        assert db.query(PriceObservation).one().price_low == RESULT["metrics"]["price_low"]

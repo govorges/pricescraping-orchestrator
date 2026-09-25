@@ -676,4 +676,53 @@ table.selbuilder input, table.selbuilder select { width: 100%; }
   .qrow { grid-template-columns: 1fr auto; }
   .qrow .qspark, .qrow .stat { display: none; }
 }
+/* ---------- cost per frame: horizontal bar chart ---------- */
+.cpf-tabs { flex-wrap: wrap; }
+.cpf-tabs .tabs { margin-bottom: 0; }
+/* brand hues: validated all-pairs (dataviz validate_palette.js) against each
+   theme's surface; red<->green sits in the 6-8 CVD warn band, so identity is
+   always backed by the brand name in the bar label + legend, never color alone */
+:root { --brand-nvidia: #199e70; --brand-amd: #e66767; --brand-intel: #3987e5; --brand-other: #8b93ab; }
+:root[data-theme="light"] { --brand-nvidia: #0a7d2c; --brand-amd: #ef6a5a; --brand-intel: #2a78d6; --brand-other: #6c7891; }
+.brand-nvidia { --brand: var(--brand-nvidia); }
+.brand-amd { --brand: var(--brand-amd); }
+.brand-intel { --brand: var(--brand-intel); }
+.brand-other { --brand: var(--brand-other); }
+.cpf-legend { flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.cpf-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px;
+  background-color: var(--brand, var(--ink-muted)); }
+.legend i.cpf-swatch { width: 10px; height: 10px; }
+.cpf-key:first-of-type { margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--rule); }
+.legend i.cpf-swatch--cost { width: 16px; height: 8px; background-color: var(--ink-soft); }
+.legend i.cpf-swatch--fps { width: 16px; height: 5px; background-color: color-mix(in srgb, var(--ink-soft) 40%, transparent);
+  box-shadow: inset -2px 0 0 var(--ink-soft); }
+.cpf-chart { position: relative; display: grid; gap: 4px; }
+.cpf-row { display: grid; grid-template-columns: minmax(8rem, 13rem) 1fr; grid-template-rows: auto auto;
+  align-items: center; column-gap: 10px; row-gap: 3px; padding: 4px; border-radius: 4px; outline: none; }
+.cpf-row:hover, .cpf-row:focus-visible { background-color: var(--inset); }
+.cpf-row:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.cpf-label { grid-row: span 2; font-size: .74rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.cpf-track { position: relative; height: 12px; border-left: 1px solid var(--rule-strong); }
+/* bars scale across the track minus room for the end label, so even the
+   longest bar's value sits beside it instead of overflowing the panel */
+.cpf-scale { position: absolute; left: 0; top: 0; bottom: 0; right: 4.8rem; }
+.cpf-bar { position: absolute; left: 0; top: 0; bottom: 0; min-width: 2px; background-color: var(--brand, var(--accent)); border-radius: 0 4px 4px 0; }
+.cpf-track--fps { height: 7px; }
+.cpf-bar--fps { background-color: color-mix(in srgb, var(--brand, var(--accent)) 40%, transparent);
+  box-shadow: inset -2px 0 0 var(--brand, var(--accent)); border-radius: 0 3px 3px 0; }
+.cpf-val { position: absolute; top: 50%; transform: translateY(-50%); margin-left: 6px; line-height: 1;
+  font-family: var(--mono); font-size: .72rem; color: var(--ink); white-space: nowrap; }
+.cpf-val--fps { font-size: .66rem; color: var(--ink-muted); }
+.cpf-tip { position: absolute; z-index: 5; pointer-events: none; min-width: 11rem; padding: 8px 10px;
+  background-color: var(--surface); border: 1px solid var(--rule-strong); border-radius: var(--r-control);
+  box-shadow: var(--shadow-layer); font-size: .72rem; color: var(--ink-soft); }
+.cpf-tip b { display: block; margin-bottom: 4px; color: var(--ink); font-family: var(--display); }
+.cpf-tip div { display: flex; justify-content: space-between; gap: 14px; }
+.cpf-tip div span:last-child { color: var(--ink); }
+.linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--accent-ink); cursor: pointer; }
+.linklike:hover { text-decoration: underline; }
+@media (max-width: 640px) {
+  .cpf-row { grid-template-columns: 6.5rem 1fr; column-gap: 6px; }
+  .cpf-scale { right: 4.2rem; }
+}
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

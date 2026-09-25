@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Cost per frame{% endblock %}
+{% set params = {'vendor': vendor_id, 'mode': mode, 'res': res, 'price': price} %}
+{% macro qs() -%}{{ url_for('cpf.cost_per_frame', **dict(params, **kwargs)) }}{%- endmacro %}
+
+{% block body %}
+<p class="pagelead">
+  What each GPU costs per average frame at the selected vendor: its latest scraped price divided by
+  Tom's Hardware's benchmark fps. Lower is better value.
+  {{ hint("Price = the latest observation for each GPU query object at this vendor. FPS = the average across Tom's Hardware's test suite at Ultra settings. Query objects are matched to benchmark entries by name (e.g. 'RTX 4060 Ti' → 'GeForce RTX 4060 Ti 8GB').") }}
+</p>
+
+{% if bench.error %}
+<div class="flash error">
+  {% if bench.fetched_at %}Couldn't refresh the benchmark data, so this page is using the copy from {{ bench.fetched_at | reltime }}.
+  {% else %}Couldn't fetch benchmark data from Tom's Hardware.{% endif %}
+  <span class="mono" style="font-size:.72rem">{{ bench.error }}</span>
+</div>
+{% endif %}
+
+<form class="toolbar" method="get" action="{{ url_for('cpf.cost_per_frame') }}">
+  <input type="hidden" name="mode" value="{{ mode }}">
+  <input type="hidden" name="res" value="{{ res }}">
+  <label>Vendor
+    <select name="vendor" onchange="this.form.submit()">
+      {% for v in vendors %}<option value="{{ v.identifier }}" {{ 'selected' if v.identifier == vendor_id }}>{{ v.name or v.identifier }}</option>{% endfor %}
+      {% if not vendors %}<option value="">no vendors configured</option>{% endif %}
+    </select>
+  </label>
+  <label>Price basis
+    <select name="price" onchange="this.form.submit()">
+      <option value="median" {{ 'selected' if price == 'median' }}>Median listing</option>
+      <option value="low" {{ 'selected' if price == 'low' }}>Lowest listing (excl. auctions)</option>
+    </select>
+  </label>
+  <noscript><button class="btn sm">Apply</button></noscript>
+  <span class="toolbar-end" style="display:flex;gap:6px">
+    {% if vendor_id %}<button class="btn ghost sm" type="submit" form="cpf-recompute" title="Recalculate prices from the listings currently stored, leaving out deleted and hidden ones">Refresh prices</button>{% endif %}
+    <a class="btn ghost sm" href="{{ url_for('cpf.export_cost_per_frame', fmt='csv', **params) }}">Export CSV</a>
+    <a class="btn ghost sm" href="{{ url_for('cpf.export_cost_per_frame', fmt='json', **params) }}">Export JSON</a>
+  </span>
+</form>
+
+<form id="cpf-recompute" method="post" action="{{ url_for('cpf.recompute_prices') }}" hidden>
+  <input type="hidden" name="vendor" value="{{ vendor_id or '' }}">
+  <input type="hidden" name="next" value="{{ qs() }}">
+</form>
+
+<div class="vitals">
+  <div class="vital">
+    <span class="lbl">Best value</span>
+    <span class="val">{% if rows %}{{ rows[0].gpu }}{% else %}—{% endif %}</span>
+    <span class="meta">{% if rows %}${{ '%.2f' % rows[0].cost_per_frame }} per frame{% else %}no priced GPUs yet{% endif %}</span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Median cost / frame</span>
+    <span class="val tnum">{% if median_cpf is not none %}${{ '%.2f' % median_cpf }}{% else %}—{% endif %}</span>
+    <span class="meta">across {{ rows | length }} GPU{{ 's' if rows | length != 1 }}</span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Benchmark data {{ hint("Tom's Hardware's GPU benchmarks hierarchy. Cached, and re-fetched automatically once it is more than 24 hours old.") }}</span>
+    <span class="val tnum">{% if bench.fetched_at %}{{ bench.fetched_at | reltime }}{% else %}—{% endif %}</span>
+    <span class="meta">
+      <a href="{{ bench.source_url }}" target="_blank" rel="noopener">source</a> ·
+      <form method="post" action="{{ url_for('cpf.refresh_benchmarks') }}" style="display:inline">
+        <input type="hidden" name="next" value="{{ qs() }}">
+        <button class="linklike" type="submit">refresh now</button>
+      </form>
+    </span>
+  </div>
+</div>
+
+<div class="panel lifted">
+  <header>
+    <h2>{{ modes[mode] }} · {{ resolutions[res] }}</h2>
+    <span class="sub">{{ 'median listing price' if price == 'median' else 'lowest non-auction listing price' }}</span>
+    <div class="right cpf-tabs">
+      <nav class="tabs" aria-label="Workload">
+        {% for key, label in modes.items() %}<a href="{{ qs(mode=key) }}" class="{{ 'active' if key == mode }}">{{ label }}</a>{% endfor %}
+      </nav>
+      <nav class="tabs" aria-label="Resolution">
+        {% for key, label in resolutions.items() %}<a href="{{ qs(res=key) }}" class="{{ 'active' if key == res }}">{{ label }}</a>{% endfor %}
+      </nav>
+    </div>
+  </header>
+
+  {% if rows %}
+  <div class="legend cpf-legend">
+    {% for key, label in brands.items() %}<span><i class="cpf-swatch brand-{{ key }}"></i>{{ label }}</span>{% endfor %}
+    <span class="cpf-key"><i class="cpf-swatch cpf-swatch--cost"></i>$ / frame (lower is better)</span>
+    <span class="cpf-key"><i class="cpf-swatch cpf-swatch--fps"></i>avg fps (higher is better)</span>
+    {{ hint("Each GPU gets two bars: its cost per frame, then its average framerate. The two are on separate scales -- compare cost bars with cost bars and fps bars with fps bars, not one against the other.") }}
+  </div>
+  <div class="cpf-chart" id="cpfChart" role="list" aria-label="Cost per frame by GPU, lowest first">
+    {% for r in rows %}
+    <div class="cpf-row brand-{{ r.brand or 'other' }}" role="listitem" tabindex="0"
+         data-gpu="{{ r.gpu }}" data-brand="{{ brands.get(r.brand, '') }}" data-price="{{ '%.2f' % r.price }}" data-fps="{{ r.fps }}"
+         data-cpf="{{ '%.2f' % r.cost_per_frame }}"
+         data-msrp="{{ '%.2f' % r.msrp_cost_per_frame if r.msrp_cost_per_frame is not none else '' }}"
+         data-seen="{{ r.observed_at | reltime if r.observed_at else '' }}">
+      <span class="cpf-label" title="{{ r.query }}">{{ r.gpu }}</span>
+      {% set cw = (r.cost_per_frame / max_cpf * 100) | round(2) if max_cpf else 0 %}
+      {% set fw = (r.fps / max_fps * 100) | round(2) if max_fps else 0 %}
+      <span class="cpf-track"><span class="cpf-scale">
+        <span class="cpf-bar" style="width:{{ cw }}%"></span>
+        <span class="cpf-val tnum" style="left:{{ cw }}%">${{ '%.2f' % r.cost_per_frame }}</span>
+      </span></span>
+      <span class="cpf-track cpf-track--fps"><span class="cpf-scale">
+        <span class="cpf-bar cpf-bar--fps" style="width:{{ fw }}%"></span>
+        <span class="cpf-val cpf-val--fps tnum" style="left:{{ fw }}%">{{ '%.1f' % r.fps }} fps</span>
+      </span></span>
+    </div>
+    {% endfor %}
+    <div class="cpf-tip" id="cpfTip" role="presentation" hidden></div>
+  </div>
+  {% else %}
+  <div class="chart-empty">
+    {% if not vendor_id %}Add a vendor to see cost-per-frame charts.
+    {% elif not bench.data.get(mode) %}No benchmark data available yet.
+    {% else %}No GPU prices from this vendor match a benchmarked card yet — run the GPU schedules for it to populate this.{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% if rows %}
+<details class="panel">
+  <summary>Table view</summary>
+  <div class="table-wrap"><table>
+    <thead><tr>
+      <th>GPU</th><th>Brand</th><th>Query</th><th class="num">Price</th><th>Seen</th><th class="num">Avg fps</th>
+      <th class="num">$ / frame</th><th class="num">MSRP</th><th class="num">MSRP $ / frame</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td><b>{{ r.gpu }}</b></td>
+        <td>{% if r.brand %}<i class="cpf-swatch brand-{{ r.brand }}"></i>{{ brands[r.brand] }}{% else %}—{% endif %}</td>
+        <td><a href="{{ url_for('insights.insight_detail', qid=r.query_id) }}">{{ r.query }}</a></td>
+        <td class="num tnum">${{ '{:,.2f}'.format(r.price) }}</td>
+        <td class="muted">{{ r.observed_at | reltime if r.observed_at else '—' }}</td>
+        <td class="num tnum">{{ r.fps }}</td>
+        <td class="num tnum"><b>${{ '%.2f' % r.cost_per_frame }}</b></td>
+        <td class="num tnum">{% if r.msrp %}${{ '{:,.2f}'.format(r.msrp) }}{% else %}—{% endif %}</td>
+        <td class="num tnum">{% if r.msrp_cost_per_frame is not none %}${{ '%.2f' % r.msrp_cost_per_frame }}{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</details>
+{% endif %}
+
+{% if unpriced or unmatched %}
+<details class="panel">
+  <summary>Not charted ({{ unpriced | length + unmatched | length }})</summary>
+  {% if unpriced %}
+  <p class="muted" style="margin-bottom:6px">Benchmarked, but no price from this vendor yet:</p>
+  <p>{% for u in unpriced %}<span class="tag">{{ u.gpu }}</span> {% endfor %}</p>
+  {% endif %}
+  {% if unmatched %}
+  <p class="muted" style="margin:10px 0 6px">Priced, but not in Tom's Hardware's {{ modes[mode] | lower }} table:</p>
+  <p>{% for q in unmatched %}<span class="tag" title="{{ q.id }}">{{ q.content or q.id }}</span> {% endfor %}</p>
+  {% endif %}
+</details>
+{% endif %}
+
+<script>
+(function () {
+  var chart = document.getElementById("cpfChart"), tip = document.getElementById("cpfTip");
+  if (!chart || !tip) return;
+  function show(row) {
+    var d = row.dataset;
+    tip.innerHTML = "";
+    var head = document.createElement("b"); head.textContent = d.gpu; tip.appendChild(head);
+    [["Brand", d.brand || "—"], ["$ / frame", "$" + d.cpf], ["Price", "$" + Number(d.price).toLocaleString(undefined, {minimumFractionDigits: 2})],
+     ["Avg fps", d.fps], ["MSRP $ / frame", d.msrp ? "$" + d.msrp : "—"], ["Seen", d.seen || "—"]
+    ].forEach(function (kv) {
+      var line = document.createElement("div");
+      var k = document.createElement("span"); k.textContent = kv[0];
+      var v = document.createElement("span"); v.className = "tnum"; v.textContent = kv[1];
+      line.appendChild(k); line.appendChild(v); tip.appendChild(line);
+    });
+    tip.hidden = false;
+    var right = 0;
+    row.querySelectorAll(".cpf-val").forEach(function (b) { right = Math.max(right, b.getBoundingClientRect().right); });
+    var host = chart.getBoundingClientRect();
+    var left = Math.min(right - host.left + 10, chart.clientWidth - tip.offsetWidth);
+    tip.style.left = Math.max(0, left) + "px";
+    tip.style.top = (row.offsetTop + row.offsetHeight / 2 - tip.offsetHeight / 2) + "px";
+  }
+  function hide() { tip.hidden = true; }
+  chart.querySelectorAll(".cpf-row").forEach(function (row) {
+    row.addEventListener("mouseenter", function () { show(row); });
+    row.addEventListener("focus", function () { show(row); });
+    row.addEventListener("mouseleave", hide);
+    row.addEventListener("blur", hide);
+  });
+})();
+</script>
+{% endblock %}

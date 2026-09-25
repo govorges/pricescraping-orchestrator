@@ -87,3 +87,24 @@ def classify_listing_type(title: str | None, extra: dict[str, Any] | None) -> Li
     # Nothing marked it as an auction — for a fixed-price-only vendor that is the
     # correct and only answer.
     return "buy_now"
+
+
+# Condition text meaning the item is sold as broken. Matched against a listing's
+# ``extra`` fields only (e.g. eBay's condition line, scraped as ``subtitle``:
+# "Parts Only" / "For parts or not working") -- those fields are exempt from the
+# query's Exclude phrases (``ignore_filter``) since seller blurbs there would
+# trip loose phrases like "only" or "read". Titles are left to the Exclude list.
+_PARTS_CONDITION_RE = re.compile(
+    r"\b(parts\s+only|for\s+parts|parts\s+or\s+not\s+working|not\s+working|non-?working"
+    r"|parts\s*/\s*repair|for\s+repair)\b",
+    re.IGNORECASE,
+)
+
+
+def parts_condition(extra: dict[str, Any] | None) -> str | None:
+    """The matching condition text when a listing is sold for parts / not
+    working, else None."""
+    for value in (extra or {}).values():
+        if isinstance(value, str) and _PARTS_CONDITION_RE.search(value):
+            return value.strip()
+    return None

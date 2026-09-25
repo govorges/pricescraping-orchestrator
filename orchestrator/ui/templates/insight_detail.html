@@ -37,7 +37,7 @@
     <span class="meta">vs 30 days ago</span>
   </div>
   <div class="vital">
-    <span class="lbl">All-time low {{ hint("Lowest single listing price ever recorded across every observation for this query, not just the current run's median.") }}</span>
+    <span class="lbl">All-time low {{ hint("Lowest single listing price ever recorded across every observation for this query, not just the current run's median. Auctions are left out -- a current bid isn't a price you can buy at.") }}</span>
     <span class="val tnum">{% if stats.get('low_min') is not none %}${{ stats.get('low_min') | round | int }}{% else %}—{% endif %}</span>
     <span class="meta">across {{ stats.get('observations', 0) }} run{{ 's' if stats.get('observations') != 1 }}</span>
   </div>
@@ -66,7 +66,7 @@
     <div class="chart-empty" id="insightEmpty" hidden>No price observations yet — run a schedule to populate this.</div>
     <p class="legend" style="margin-top:8px">
       <span><i style="background:#2f6fed"></i>median</span>
-      <span><i style="background:#22c55e"></i>low</span>
+      <span><i style="background:#22c55e"></i>low (excl. auctions)</span>
     </p>
   </div>
 

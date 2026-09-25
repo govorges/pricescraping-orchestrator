@@ -334,6 +334,19 @@ class ListingPricePoint(Base):
     tracked_listing: Mapped[TrackedListing] = relationship(back_populates="price_points")
 
 
+class BenchmarkSnapshot(Base):
+    """The last successful fetch of an external benchmark source (e.g. Tom's
+    Hardware's GPU hierarchy), cached whole so pages don't hit the source on
+    every request -- see :mod:`orchestrator.benchmarks`. One row per source."""
+
+    __tablename__ = "benchmark_snapshot"
+
+    source: Mapped[str] = mapped_column(String(64), primary_key=True)
+    url: Mapped[str] = mapped_column(Text, default="")
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
 class Node(Base):
     __tablename__ = "node"
 
