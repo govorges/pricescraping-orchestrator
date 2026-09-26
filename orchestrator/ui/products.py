@@ -10,10 +10,11 @@ delete form posts still live in ``views`` -- only where they land changed.
 from __future__ import annotations
 
 from flask import Blueprint, abort, render_template, request
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from orchestrator import get_db
 from orchestrator.models import (
+    Anomaly,
     Category,
     CategorySchedule,
     Job,
@@ -99,6 +100,10 @@ def _active_listing_count(db, qid: str) -> int:
 def _frame(db, q: QueryObject, tab: str) -> dict:
     """What the shared product header and tab strip (``_product.html``) need."""
     direct, via_category = _schedules_for(db, q)
+    open_anomalies = db.scalars(
+        select(Anomaly).where(Anomaly.query_object_id == q.id, Anomaly.status == "open")
+        .order_by(case({"high": 0, "med": 1}, value=Anomaly.severity, else_=2), Anomaly.detected_at.desc())
+    ).all()
     return {
         "q": q,
         "tab": tab,
@@ -106,6 +111,7 @@ def _frame(db, q: QueryObject, tab: str) -> dict:
         "product": {
             "active_listings": _active_listing_count(db, q.id),
             "schedules_enabled": sum(1 for s in [*direct, *via_category] if s.enabled),
+            "open_anomalies": open_anomalies,
         },
     }
 

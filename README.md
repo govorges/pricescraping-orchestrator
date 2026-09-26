@@ -210,10 +210,16 @@ Every provisioned worker inherits `Settings.worker_base_env()` — `REDIS_URL`,
 
 **Dashboard (HTML, HTMX-polled):** `/` · `/products` · `/products/<id>` (Overview)
 · `/products/<id>/listings` · `/products/<id>/settings` · `/tracked` · `/tracked/<id>` ·
-`/cost-per-frame` · `/vendors` · `/categories` · `/schedules` · `/runs` (`?status=dead` shows
+`/cost-per-frame` · `/anomalies` · `/anomalies/rules` · `/vendors` · `/categories` · `/schedules` · `/runs` (`?status=dead` shows
 the dead-letter stream) · `/runs/<id>` · `/nodes` · `/database`. The old `/queries`,
 `/queries/<id>/listings`, `/insights`, `/insights/<id>`, `/jobs` and `/jobs/<id>` pages
 permanently redirect to their new equivalents.
+
+**Anomalies:** every ingested run is checked for outlier listings, sudden or steady
+median moves, listing price cuts and broken-looking runs (`orchestrator/anomalies.py`),
+each vendor compared only with its own history. Rules are tuned on `/anomalies/rules`.
+Runs from before the checks existed can be checked once with
+`python scripts/backfill_anomalies.py` (after `alembic upgrade head`).
 
 **JSON API (`/api/v1`):**
 

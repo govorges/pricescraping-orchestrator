@@ -7,6 +7,7 @@ from sqlalchemy import select
 
 from orchestrator import get_db
 from orchestrator.models import Job, Listing
+from orchestrator.prices import recompute_jobs
 
 bp = Blueprint("listings", __name__, url_prefix="/api/v1")
 
@@ -59,6 +60,7 @@ def hide_listing(listing_id: int):
     if listing is None:
         return jsonify({"error": "not found"}), 404
     listing.hidden = True
+    recompute_jobs(db, [listing.job_id])
     db.commit()
     return jsonify(listing_dict(listing))
 
@@ -70,6 +72,7 @@ def unhide_listing(listing_id: int):
     if listing is None:
         return jsonify({"error": "not found"}), 404
     listing.hidden = False
+    recompute_jobs(db, [listing.job_id])
     db.commit()
     return jsonify(listing_dict(listing))
 
@@ -80,6 +83,8 @@ def delete_listing(listing_id: int):
     listing = db.get(Listing, listing_id)
     if listing is None:
         return jsonify({"error": "not found"}), 404
+    job_id = listing.job_id
     db.delete(listing)
+    recompute_jobs(db, [job_id])
     db.commit()
     return "", 204

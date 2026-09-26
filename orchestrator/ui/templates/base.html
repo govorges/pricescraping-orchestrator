@@ -42,6 +42,10 @@
         <a href="{{ url_for('ui.tracked_listings') }}" {{ 'aria-current=page' if page.startswith('/tracked') }}>
           <svg viewBox="0 0 24 24"><path d="M4 19V5m0 14h16M8 15l3-4 3 3 4-6"/></svg> Listings
         </a>
+        <a href="{{ url_for('anomalies.inbox') }}" {{ 'aria-current=page' if page.startswith('/anomalies') }}>
+          <svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17h.01"/></svg>
+          Anomalies {% if nav.anomalies %}<span class="tag warn" title="{{ nav.anomalies }} open">{{ nav.anomalies }}</span>{% endif %}
+        </a>
         <a href="{{ url_for('cpf.cost_per_frame') }}" {{ 'aria-current=page' if page.startswith('/cost-per-frame') }}>
           <svg viewBox="0 0 24 24"><path d="M4 6h9M4 12h13M4 18h6"/><path d="M19 4v4m0 8v4m-2-2h3"/></svg> Cost per frame
         </a>

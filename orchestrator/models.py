@@ -245,6 +245,10 @@ class PriceObservation(Base):
     price_median: Mapped[float | None] = mapped_column(Float, nullable=True)
     listings_found: Mapped[int] = mapped_column(Integer, default=0)
     listings_kept: Mapped[int] = mapped_column(Integer, default=0)
+    # Left out of price trends (product figures, charts, cost per frame) and of
+    # the "is this listing still for sale" check -- set when a run is judged
+    # untrustworthy, e.g. a scrape that kept far fewer listings than usual.
+    excluded: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
 
 class Listing(Base):
@@ -338,6 +342,45 @@ class ListingPricePoint(Base):
     extra: Mapped[dict] = mapped_column(JSON, default=dict)
 
     tracked_listing: Mapped[TrackedListing] = relationship(back_populates="price_points")
+
+
+class Anomaly(Base):
+    """Something odd in a run worth a look: an outlier listing, a sudden or
+    sustained median move, a listing price cut, or a run whose data looks
+    broken. Raised by :mod:`orchestrator.anomalies` when a result is ingested;
+    ``dedupe_key`` keeps an ingest replay from raising the same one twice."""
+
+    __tablename__ = "anomaly"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dedupe_key: Mapped[str] = mapped_column(String(256), unique=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True)  # outlier | move | cut | health
+    severity: Mapped[str] = mapped_column(String(8), index=True)  # high | med | low
+    status: Mapped[str] = mapped_column(String(16), default="open", index=True)  # open | reviewed
+    resolution: Mapped[str] = mapped_column(String(128), default="")
+    vendor_id: Mapped[str] = mapped_column(String(128), index=True)
+    query_object_id: Mapped[str] = mapped_column(String(128), index=True)
+    job_id: Mapped[str] = mapped_column(String(64), index=True)
+    tracked_listing_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    title: Mapped[str] = mapped_column(Text, default="")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AnomalyRuleSet(Base):
+    """Stored overrides for the anomaly rules: ``scope`` is ``"default"`` (all
+    products) or a category id. Only the numbers someone changed are kept;
+    :func:`orchestrator.anomalies.rules_for` merges them over the code defaults."""
+
+    __tablename__ = "anomaly_rule_set"
+
+    scope: Mapped[str] = mapped_column(String(128), primary_key=True)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
 
 
 class BenchmarkSnapshot(Base):

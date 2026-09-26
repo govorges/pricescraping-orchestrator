@@ -104,7 +104,8 @@ def _leaderboard(db, category_id: str | None = None) -> list[dict]:
             PriceObservation.price_median,
             PriceObservation.vendor_id,
         )
-        .where(PriceObservation.query_object_id.in_(qids), PriceObservation.price_median.is_not(None))
+        .where(PriceObservation.query_object_id.in_(qids), PriceObservation.price_median.is_not(None),
+               PriceObservation.excluded.is_(False))
         .order_by(PriceObservation.observed_at.asc())
     ).all()
     by_qid: dict[str, list] = {}
@@ -182,6 +183,7 @@ def _obs_dict(o: PriceObservation) -> dict:
         "price_median": o.price_median,
         "listings_found": o.listings_found,
         "listings_kept": o.listings_kept,
+        "excluded": bool(o.excluded),
     }
 
 
@@ -192,7 +194,7 @@ def _query_insights(db, q: QueryObject) -> dict:
         .where(PriceObservation.query_object_id == q.id)
         .order_by(PriceObservation.observed_at.asc())
     ).all()
-    summary = price_summary((r.observed_at, r.price_median, r.vendor_id) for r in history)
+    summary = price_summary((r.observed_at, r.price_median, r.vendor_id) for r in history if not r.excluded)
     total_tracked = (
         db.scalar(
             select(func.count()).select_from(TrackedListing).where(TrackedListing.query_object_id == q.id)

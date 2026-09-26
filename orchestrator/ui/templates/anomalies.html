@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% set base_args = {'status': status, 'kind': kind or none, 'qid': qid or none, 'job': job_id or none} %}
+{% macro aurl() -%}{{ url_for('anomalies.inbox', **dict(base_args, **kwargs)) }}{%- endmacro %}
+{% macro money(v) %}{% if v is not none %}${{ '{:,}'.format(v | round | int) }}{% else %}—{% endif %}{% endmacro %}
+{% macro sev_dot(s) %}<i class="dot {{ 'crit' if s == 'high' else ('warn' if s == 'med' else 'info') }}"></i>{% endmacro %}
+{% macro pname(id) %}{{ qmap[id].content if id in qmap and qmap[id].content else id }}{% endmacro %}
+{% macro vname(id) %}{{ vmap[id].name if id in vmap and vmap[id].name else id }}{% endmacro %}
+{% macro act(action, label, primary=False) -%}
+<form method="post" action="{{ url_for('anomalies.resolve_anomaly', aid=selected.id) }}" class="inline">
+  <input type="hidden" name="action" value="{{ action }}">
+  <input type="hidden" name="next" value="{{ request.full_path }}">
+  <button class="btn sm{{ '' if primary else ' ghost' }}" type="submit">{{ label }}</button>
+</form>
+{%- endmacro %}
+
+{% block title %}Anomalies{% endblock %}
+{% block action %}
+  <a class="btn ghost" href="{{ url_for('anomalies.rules_page') }}">Detection rules</a>
+{% endblock %}
+
+{% block body %}
+<p class="pagelead">
+  Checked after every run: listings priced far from the rest, medians that jump or drift, listings that got
+  cheaper, and runs whose data looks broken. Each vendor is only ever compared with itself.
+</p>
+
+<div class="toolbar">
+  <div class="filter-chips" role="group" aria-label="Status">
+    {% for key, label in [('open', 'Open'), ('reviewed', 'Reviewed')] %}
+    <a href="{{ aurl(status=key, id=None) }}" class="{{ 'active' if status == key }}">{{ label }} {{ status_counts.get(key, 0) }}</a>
+    {% endfor %}
+  </div>
+  <div class="filter-chips" role="group" aria-label="Type">
+    <a href="{{ aurl(kind='', id=None) }}" class="{{ 'active' if not kind }}">All types {{ kind_counts.values() | sum }}</a>
+    {% for key, label in kind_labels.items() %}
+    <a href="{{ aurl(kind=key, id=None) }}" class="{{ 'active' if kind == key }}">{{ label }} {{ kind_counts.get(key, 0) }}</a>
+    {% endfor %}
+  </div>
+  {% if qid or job_id %}
+  <span class="toolbar-end">
+    {% if qid %}<span class="tag tag--cat">{{ pname(qid) }}</span>{% endif %}
+    {% if job_id %}<span class="tag">run <span class="mono">{{ job_id[:8] }}</span></span>{% endif %}
+    <a href="{{ url_for('anomalies.inbox', status=status, kind=kind) }}">Show all</a>
+  </span>
+  {% endif %}
+</div>
+
+<div class="anom-split">
+  <nav class="anom-list" aria-label="Anomalies">
+    {% for a in rows %}
+    <a class="anom-item" href="{{ aurl(id=a.id) }}" {{ 'aria-current=true' if selected and a.id == selected.id }}>
+      <span class="anom-meta">{{ sev_dot(a.severity) }}<span class="mono">{{ kind_tags[a.kind] }}</span><span class="when">{{ a.detected_at | reltime }}</span></span>
+      <b>{{ a.title }}</b>
+      <span class="muted">{{ pname(a.query_object_id) }} · {{ vname(a.vendor_id) }}</span>
+      {% if a.status == 'reviewed' %}<span class="pill pill--ok">{{ a.resolution }}</span>{% endif %}
+    </a>
+    {% else %}
+    <p class="muted" style="padding:16px">
+      {% if status == 'open' %}Nothing to review{{ ' of this type' if kind }}. New runs are checked as they arrive.
+      {% else %}Nothing reviewed yet.{% endif %}
+    </p>
+    {% endfor %}
+  </nav>
+
+  {% if selected %}
+  {% set a = selected %}
+  {% set d = a.details or {} %}
+  <section class="anom-detail" aria-label="Anomaly detail">
+    <div class="anom-head">
+      <span class="pill pill--{{ 'crit' if a.severity == 'high' else ('warn' if a.severity == 'med' else 'info') }}">{{ {'high': 'High', 'med': 'Medium', 'low': 'Low'}[a.severity] }} severity</span>
+      <span class="tag">{{ kind_tags[a.kind] }}</span>
+      <span class="muted">{{ a.detected_at.strftime('%b %d, %H:%M') if a.detected_at else '' }} UTC</span>
+    </div>
+    <h2>{{ a.title }}</h2>
+    <p class="anom-summary">{{ a.summary }}</p>
+    <p class="anom-links">
+      <a href="{{ url_for('products.overview', qid=a.query_object_id) }}">{{ pname(a.query_object_id) }}</a>
+      · {{ vname(a.vendor_id) }}
+      · <a href="{{ url_for('ui.run_detail', job_id=a.job_id) }}">Open run</a>
+      {% if a.tracked_listing_id %}· <a href="{{ url_for('ui.tracked_listing_detail', tracked_id=a.tracked_listing_id) }}">Listing history</a>{% endif %}
+      {% if d.link %}· <a href="{{ d.link }}" target="_blank" rel="noopener">Open on vendor ↗</a>{% endif %}
+    </p>
+
+    <div class="panel">
+      {% if evidence.strip %}{% set s = evidence.strip %}
+      <header><h3>Every listing kept in this run</h3><span class="sub">{{ d.run_prices | length }} listings</span></header>
+      <svg class="anom-chart" viewBox="0 0 700 230" role="img" aria-label="Listing prices in this run, with the flagged one highlighted">
+        <line x1="{{ s.threshold }}" y1="24" x2="{{ s.threshold }}" y2="186" class="anom-threshold"></line>
+        <text x="{{ s.threshold + 6 }}" y="20" class="anom-threshold-txt">flag line {{ money(d.threshold) }}</text>
+        <line x1="{{ s.median }}" y1="30" x2="{{ s.median }}" y2="186" class="anom-median"></line>
+        <text x="{{ s.median + 6 }}" y="36" class="anom-median-txt">median {{ money(d.median) }}</text>
+        {% for p in s.dots %}<circle cx="{{ p.x }}" cy="{{ p.y }}" r="4" class="anom-dot"></circle>{% endfor %}
+        <circle cx="{{ s.flag.x }}" cy="{{ s.flag.y }}" r="7" class="anom-flag"></circle>
+        <line x1="40" y1="200" x2="660" y2="200" class="grid-line"></line>
+        {% for t in s.ticks %}<text x="{{ t.x }}" y="218" text-anchor="middle" class="axis-txt">{{ t.label }}</text>{% endfor %}
+      </svg>
+      <p class="legend"><span><i class="anom-key-dot"></i>other listings</span><span><i class="anom-key-flag"></i>flagged listing</span></p>
+
+      {% elif evidence.bars %}{% set b = evidence.bars %}
+      <header><h3>Listings kept per run</h3><span class="sub">last {{ b.bars | length }} runs</span></header>
+      <svg class="anom-chart" viewBox="0 0 700 230" role="img" aria-label="Listings kept per run, with this run highlighted">
+        <line x1="40" y1="{{ b.avg_y }}" x2="660" y2="{{ b.avg_y }}" class="anom-median"></line>
+        <text x="660" y="{{ b.avg_y - 6 }}" text-anchor="end" class="anom-median-txt">average {{ b.avg }} kept</text>
+        {% for bar in b.bars %}
+        <rect x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.w }}" height="{{ bar.h }}" rx="3" class="{{ 'anom-flag-bar' if bar.flag else 'anom-dot' }}"></rect>
+        <text x="{{ bar.x + bar.w / 2 }}" y="{{ bar.y - 6 }}" text-anchor="middle" class="axis-txt">{{ bar.v }}</text>
+        {% endfor %}
+        <line x1="40" y1="190" x2="660" y2="190" class="grid-line"></line>
+        <text x="660" y="214" text-anchor="end" class="axis-txt">this run</text>
+      </svg>
+
+      {% elif evidence.line %}
+      <header><h3>{{ 'Median per run' if a.kind == 'move' else "This listing's price over time" }}</h3>
+        <span class="sub">{{ 'last ' ~ (evidence.line.points | length) ~ ' runs' if a.kind == 'move' else (evidence.line.points | length) ~ ' sightings' }}</span></header>
+      <svg class="chart" id="anomChart" viewBox="0 0 700 240" role="img" aria-label="{{ 'Median per run' if a.kind == 'move' else 'Listing price over time' }}"></svg>
+      <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        var svg = document.getElementById("anomChart");
+        var L = {{ evidence.line | tojson }};
+        var fmt = function (iso) { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+        var labels = L.dates.length > 5
+          ? [0, 0.5, 1].map(function (f) { return fmt(L.dates[Math.round(f * (L.dates.length - 1))]); })
+          : L.dates.map(fmt);
+        window.registerChart(svg, function () {
+          window.drawLineChart(svg, [{ name: "price", points: L.points, color: "#2f6fed" }],
+            { xlabels: labels, ref: L.ref, refLabel: L.ref_label });
+        });
+      });
+      </script>
+      {% else %}
+      <p class="muted">No chart for this one.</p>
+      {% endif %}
+    </div>
+
+    <div class="row halves">
+      <div class="panel">
+        <header><h3>Why it was flagged</h3></header>
+        <div class="dl">
+          {% if a.kind == 'outlier' %}
+            <dt>Listing price</dt><dd class="tnum">{{ money(d.price) }}</dd>
+            <dt>Run median</dt><dd class="tnum">{{ money(d.median) }}</dd>
+            <dt>Rule</dt><dd>{{ 'below' if d.side == 'low' else 'above' }} {{ d.rule_pct }}% of the median ({{ money(d.threshold) }})</dd>
+            <dt>Type</dt><dd>{{ {'buy_now': 'Buy it now', 'auction': 'Auction'}.get(d.listing_type, 'Unknown') }}</dd>
+            {% if d.side == 'low' and d.listing_type != 'auction' and d.low_if_removed is not none %}<dt>Low price without it</dt><dd class="tnum">{{ money(d.low_if_removed) }}</dd>{% endif %}
+          {% elif a.kind == 'move' %}
+            <dt>Previous run</dt><dd class="tnum">{{ money(d.previous) }}</dd>
+            <dt>This run</dt><dd class="tnum">{{ money(d.median) }}</dd>
+            <dt>{{ d.window_days }}-day median</dt><dd class="tnum">{{ money(d.baseline) }} <span class="muted">(usual swing ±{{ d.swing_pct }}%)</span></dd>
+            <dt>Move</dt><dd class="tnum">{{ '%+.1f%%' % d.move_pct }}{{ ' over several runs' if d.pattern == 'sustained' }}</dd>
+            <dt>Listings kept</dt><dd class="tnum">{{ d.kept }} <span class="muted">(usually {{ d.kept_usual }})</span></dd>
+          {% elif a.kind == 'cut' %}
+            <dt>Before</dt><dd class="tnum">{{ money(d.before) }}</dd>
+            <dt>Now</dt><dd class="tnum">{{ money(d.price) }} <span class="muted">({{ '%+.0f%%' % d.drop_pct }})</span></dd>
+            <dt>Run median</dt><dd class="tnum">{{ money(d.median) }}</dd>
+          {% elif a.kind == 'health' %}
+            <dt>Kept this run</dt><dd class="tnum">{{ d.kept }} of {{ d.found }} found</dd>
+            <dt>Recent average</dt><dd class="tnum">{{ d.kept_avg | round | int }} kept</dd>
+            <dt>Dropped</dt><dd class="tnum">{{ d.dropped_pct }}% of found</dd>
+          {% endif %}
+          <dt>In trends</dt><dd>{% if obs and obs.excluded %}<span class="pill pill--warn">left out</span>{% else %}yes{% endif %}</dd>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header><h3>What to do</h3></header>
+        {% if a.status == 'reviewed' %}
+          <p class="help">Reviewed{% if a.reviewed_at %} {{ a.reviewed_at | reltime }}{% endif %}: <b>{{ a.resolution }}</b>.</p>
+          <div class="anom-actions">
+            {% if obs and obs.excluded and a.kind in ('move', 'health') %}{{ act('include_run', 'Put run back in trends') }}{% endif %}
+            {{ act('reopen', 'Reopen') }}
+          </div>
+        {% else %}
+          <p class="help">
+            {% if a.kind == 'outlier' %}Hiding it takes it out of this run's prices. An exclude phrase also stops listings like it coming back.
+            {% elif a.kind == 'move' %}Check the run's listings. If the move is real, confirm it so it stays in the trend; if bad listings caused it, leave the run out of trends.
+            {% elif a.kind == 'cut' %}Not a data problem — a listing got cheaper. Open it if you're buying, or dismiss the flag.
+            {% elif a.kind == 'health' %}{% if obs and obs.excluded %}This run is already left out of trends until you review it. {% endif %}Re-run it first; if it happens again, check the search phrase, excludes and the vendor's selectors.
+            {% endif %}
+          </p>
+          <div class="anom-actions">
+            {% if a.kind == 'outlier' %}
+              {{ act('hide_listing', 'Hide listing', primary=True) }}
+              <form method="post" action="{{ url_for('anomalies.resolve_anomaly', aid=a.id) }}" class="anom-phrase">
+                <input type="hidden" name="action" value="exclude_phrase">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input name="phrase" required placeholder="phrase, e.g. box only" aria-label="Exclude phrase">
+                <button class="btn ghost sm" type="submit">Exclude phrase</button>
+              </form>
+              {{ act('dismiss', 'Not an outlier') }}
+            {% elif a.kind == 'move' %}
+              <a class="btn sm" href="{{ url_for('ui.run_detail', job_id=a.job_id) }}">Review listings</a>
+              {{ act('confirm', 'Real price move') }}
+              {% if obs and not obs.excluded %}{{ act('exclude_run', 'Leave out of trends') }}{% endif %}
+            {% elif a.kind == 'cut' %}
+              {% if a.tracked_listing_id %}<a class="btn sm" href="{{ url_for('ui.tracked_listing_detail', tracked_id=a.tracked_listing_id) }}">Open listing</a>{% endif %}
+              {{ act('dismiss', 'Dismiss') }}
+            {% elif a.kind == 'health' %}
+              {% if schedule %}{{ act('rerun', 'Re-run now', primary=True) }}{% endif %}
+              {% if obs and obs.excluded %}{{ act('include_run', 'Keep in trends') }}{% else %}{{ act('exclude_run', 'Leave out of trends') }}{% endif %}
+              {{ act('dismiss', 'Dismiss') }}
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

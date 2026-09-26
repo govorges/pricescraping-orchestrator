@@ -39,6 +39,16 @@
   </span>
 </div>
 
+{% if obs and obs.excluded %}
+<div class="note warn" style="margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+  <span style="flex:1">This run is <b>left out of price trends</b>: product prices, charts and Cost per frame skip it, and it
+    doesn't count against listings when deciding what's sold.</span>
+  <form class="inline" method="post" action="{{ url_for('ui.set_run_in_trends', job_id=job.job_id) }}">
+    <input type="hidden" name="include" value="1"><button class="btn ghost sm" type="submit">Count it again</button>
+  </form>
+</div>
+{% endif %}
+
 {% if job.error_type %}
 <div class="note warn" style="margin-bottom:16px">
   <b>{{ job.error_type }}</b>{% if job.error_message %} <span class="muted">— {{ job.error_message }}</span>{% endif %}
@@ -163,6 +173,22 @@
     </div>
   </div>
 
+  <div class="stack">
+  {% if anomalies %}
+  <div class="panel">
+    <header><h2>Anomalies</h2><span class="sub">raised by this run</span>
+      <span class="right"><a href="{{ url_for('anomalies.inbox', job=job.job_id, status='open') }}">Review →</a></span></header>
+    <ul class="feed">
+      {% for a in anomalies %}
+      <li>
+        <i class="dot {{ 'crit' if a.severity == 'high' else ('warn' if a.severity == 'med' else 'info') }}"></i>
+        <span class="who"><a href="{{ url_for('anomalies.inbox', job=job.job_id, status=a.status, id=a.id) }}">{{ a.title }}</a>
+          <div class="line2">{{ a.resolution if a.status == 'reviewed' else 'open' }}</div></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
   <div class="panel">
     <header><h2>Run details</h2></header>
     <div class="dl">
@@ -177,6 +203,13 @@
       <dt>Run id <span class="subid">job_id</span></dt><dd class="mono" style="word-break:break-all">{{ job.job_id }}</dd>
       <dt>Stream msg <span class="subid">msg_id</span></dt><dd class="mono">{{ job.msg_id or '—' }}</dd>
     </div>
+    {% if obs and not obs.excluded %}
+    <form method="post" action="{{ url_for('ui.set_run_in_trends', job_id=job.job_id) }}" style="margin-top:12px"
+          onsubmit="return confirm('Leave this run out of price trends? Product prices, charts and Cost per frame will skip it.')">
+      <button class="btn ghost sm" type="submit">Leave out of trends</button>
+    </form>
+    {% endif %}
+  </div>
   </div>
 </div>
 {% endblock %}

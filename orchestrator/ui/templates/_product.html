@@ -17,6 +17,9 @@
   {% else %}
     <span class="pill pill--warn"><i class="dot"></i>not scheduled</span>
   {% endif %}
+  {% if product.open_anomalies %}
+    <a class="pill pill--warn" href="{{ url_for('anomalies.inbox', qid=q.id) }}">{{ product.open_anomalies | length }} open anomal{{ 'y' if product.open_anomalies | length == 1 else 'ies' }}</a>
+  {% endif %}
 </div>
 
 <nav class="ptabs" aria-label="Product sections">

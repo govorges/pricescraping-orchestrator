@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hint %}
+{% block title %}Detection rules{% endblock %}
+{% block action %}
+  <a class="btn ghost" href="{{ url_for('anomalies.inbox') }}">← Anomalies</a>
+{% endblock %}
+
+{% macro num(kind, field, label, step=1) -%}
+<input class="rule-num" type="number" min="0" step="{{ step }}" name="{{ kind }}.{{ field }}" value="{{ rules[kind][field] }}" aria-label="{{ label }}">
+{%- endmacro %}
+{% macro action_select(kind, labels) -%}
+<select name="{{ kind }}.action" aria-label="What happens when this rule flags a run">
+  {% for value in actions[kind] %}<option value="{{ value }}" {{ 'selected' if rules[kind].action == value }}>{{ labels[value] }}</option>{% endfor %}
+</select>
+{%- endmacro %}
+{% macro stat(kind) -%}
+<span class="rule-stat">
+  {% if preview %}would raise <b>{{ preview[kind] }}</b> in the last {{ preview.days }} days
+  {% else %}raised <b>{{ raised.get(kind, 0) }}</b> in the last 30 days{% endif %}
+</span>
+{%- endmacro %}
+{% macro head(kind, blurb) -%}
+<header>
+  <input type="hidden" name="{{ kind }}.present" value="1">
+  <label class="rule-toggle"><input type="checkbox" name="{{ kind }}.enabled" {{ 'checked' if rules[kind].enabled }}> <h2>{{ kind_labels[kind] }}</h2></label>
+  <span class="sub">{{ blurb }}</span>
+</header>
+{%- endmacro %}
+
+{% block body %}
+<p class="pagelead">
+  Checked after every run, comparing each vendor only with its own history. Each rule shows how often it fires,
+  so you can tune it before it gets noisy. {% if categories %}A category can override any number.{% endif %}
+</p>
+
+<form class="toolbar" method="get" action="{{ url_for('anomalies.rules_page') }}">
+  <label>Editing
+    <select name="scope" onchange="this.form.submit()">
+      <option value="default" {{ 'selected' if scope == 'default' }}>Defaults for all products</option>
+      {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if scope == c.id }}>{{ c.name or c.id }} (category override)</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button class="btn sm">Switch</button></noscript>
+</form>
+
+{% if preview %}
+<div class="note" style="margin-bottom:16px">
+  Showing what these <b>unsaved</b> numbers would have raised over the last {{ preview.days }} days
+  {%- if scope != 'default' %} for this category's products{% endif %}. Nothing was saved or flagged.
+</div>
+{% endif %}
+
+<form method="post" action="{{ url_for('anomalies.save_rules_view') }}">
+  <input type="hidden" name="scope" value="{{ scope }}">
+  <div class="row halves">
+    <section class="panel rule">
+      {{ head('outlier', "one listing far from its run's median") }}
+      <p class="rule-line">Flag a listing priced below {{ num('outlier', 'low_pct', 'Low threshold percent') }}% or above
+        {{ num('outlier', 'high_pct', 'High threshold percent') }}% of its run's median.</p>
+      <p class="rule-line">Check auctions too:
+        <select name="outlier.auctions" aria-label="Whether auctions are checked">
+          <option value="never" {{ 'selected' if rules.outlier.auctions == 'never' }}>no — opening bids are meant to be low</option>
+          <option value="always" {{ 'selected' if rules.outlier.auctions == 'always' }}>yes</option>
+        </select></p>
+      <div class="rule-foot">When flagged {{ action_select('outlier', {'flag': 'Flag for review', 'hide': 'Flag and hide the listing'}) }}{{ stat('outlier') }}</div>
+    </section>
+
+    <section class="panel rule">
+      {{ head('move', "a product's price jumps or drifts") }}
+      <p class="rule-line">Flag a run whose median differs from the {{ num('move', 'window_days', 'Baseline window in days') }}-day median by more than
+        {{ num('move', 'min_pct', 'Move percent') }}% and by more than {{ num('move', 'swing_multiple', 'Swing multiple', 0.5) }}× that product's usual run-to-run swing.</p>
+      <p class="rule-line">Also flag a steady move over {{ num('move', 'sustained_runs', 'Runs in a row') }} runs in a row.</p>
+      <div class="rule-foot">When flagged {{ action_select('move', {'flag': 'Flag for review', 'exclude': 'Flag and leave the run out of trends'}) }}{{ stat('move') }}</div>
+    </section>
+
+    <section class="panel rule">
+      {{ head('cut', 'a tracked listing gets cheaper') }}
+      <p class="rule-line">Flag when a buy-it-now listing drops by more than {{ num('cut', 'min_pct', 'Cut percent') }}% between runs
+        and ends up within {{ num('cut', 'near_median_pct', 'Near median percent') }}% of the run median or below it.</p>
+      <div class="rule-foot">When flagged {{ action_select('cut', {'flag': 'Flag for review', 'log': 'Just log it (no review needed)'}) }}{{ stat('cut') }}</div>
+    </section>
+
+    <section class="panel rule">
+      {{ head('health', 'the data itself looks wrong') }}
+      <p class="rule-line">Flag a run that keeps fewer than {{ num('health', 'kept_pct', 'Kept percent') }}% of its recent average listings,
+        or where more than {{ num('health', 'dropped_pct', 'Dropped percent') }}% of found listings were dropped.
+        {{ hint("Some searches always drop most of what they find (a strict search phrase, a long exclude list), so the dropped share is set high by default. Test before lowering it.") }}</p>
+      <div class="rule-foot">When flagged {{ action_select('health', {'exclude': 'Flag and leave the run out of trends', 'flag': 'Flag for review'}) }}{{ stat('health') }}</div>
+    </section>
+  </div>
+
+  <div class="form-actions" style="margin-top:16px">
+    <button class="btn" type="submit" name="intent" value="save">Save rules</button>
+    <button class="btn ghost" type="submit" name="intent" value="test">Test on last 30 days</button>
+  </div>
+</form>
+{% endblock %}

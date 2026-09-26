@@ -21,6 +21,7 @@ from sqlalchemy import func, or_, select
 
 from orchestrator import get_db
 from orchestrator.models import (
+    Anomaly,
     Category,
     CategorySchedule,
     DroppedListing,
@@ -34,6 +35,7 @@ from orchestrator.models import (
     TrackedListing,
     Vendor,
 )
+from orchestrator.prices import delete_tracked_listing, recompute_for_tracked
 from orchestrator.provisioning import NodeSpec, ProvisioningError, get_provisioner
 from orchestrator.queue import delete_message, purge_queue, read_deadletter, stream_stats
 from orchestrator.schemas import QueryObject as QuerySchema
@@ -135,7 +137,7 @@ def _nav_context():
     """Sidebar system-status figures. Never raises — a dead Redis or empty DB
     just shows zeros."""
     nav = {"queue_depth": 0, "workers_up": 0, "workers_desired": 0,
-           "deadletter": 0, "freshness": "—", "redis_ok": True}
+           "deadletter": 0, "freshness": "—", "redis_ok": True, "anomalies": 0}
     try:
         q = _queue_stats()
         nav["queue_depth"] = q.get("depth", 0)
@@ -150,6 +152,9 @@ def _nav_context():
             nav["workers_desired"] += n.replicas_desired or 0
         last = db.scalar(select(func.max(Job.result_at)))
         nav["freshness"] = _reltime(last) if last else "—"
+        nav["anomalies"] = db.scalar(
+            select(func.count()).select_from(Anomaly).where(Anomaly.status == "open")
+        ) or 0
     except Exception:  # noqa: BLE001
         pass
     return {"nav": nav, "provider": _settings().provider}
@@ -547,7 +552,7 @@ def apply_category_excludes(cid: str):
 def _query_price_stats(db, qid: str) -> dict | None:
     rows = db.scalars(
         select(PriceObservation)
-        .where(PriceObservation.query_object_id == qid)
+        .where(PriceObservation.query_object_id == qid, PriceObservation.excluded.is_(False))
         .order_by(PriceObservation.observed_at.asc())
     ).all()
     if not rows:
@@ -713,10 +718,12 @@ def _run_times_by_vendor(db, qid: str) -> dict[str, list]:
     for a query object — used to tell whether a listing was in the most recent
     run(s). A run with ``status == "error"`` (includes a blocked/challenge-page
     scrape that returned zero listings) proves nothing about what's still
-    listed, so it is never held against a listing's absence."""
+    listed, so it is never held against a listing's absence. Neither is a run
+    left out of trends (e.g. one that kept far fewer listings than usual)."""
     rows = db.execute(
         select(PriceObservation.vendor_id, PriceObservation.observed_at)
-        .where(PriceObservation.query_object_id == qid, PriceObservation.status != "error")
+        .where(PriceObservation.query_object_id == qid, PriceObservation.status != "error",
+               PriceObservation.excluded.is_(False))
         .order_by(PriceObservation.observed_at.desc())
     ).all()
     out: dict[str, list] = {}
@@ -748,6 +755,7 @@ def hide_tracked(tracked_id: int):
     t = db.get(TrackedListing, tracked_id)
     if t:
         t.hidden = True
+        recompute_for_tracked(db, [t.id])
         db.commit()
     return redirect(request.referrer or url_for("ui.tracked_listings"))
 
@@ -758,6 +766,7 @@ def unhide_tracked(tracked_id: int):
     t = db.get(TrackedListing, tracked_id)
     if t:
         t.hidden = False
+        recompute_for_tracked(db, [t.id])
         db.commit()
     return redirect(request.referrer or url_for("ui.tracked_listings"))
 
@@ -767,9 +776,9 @@ def delete_tracked(tracked_id: int):
     db = get_db()
     t = db.get(TrackedListing, tracked_id)
     if t:
-        db.delete(t)
+        delete_tracked_listing(db, t)
         db.commit()
-        flash("tracked listing and its price history deleted", "ok")
+        flash("listing deleted, along with its price history, and taken out of the runs it was in", "ok")
     return redirect(request.referrer or url_for("ui.tracked_listings"))
 
 
@@ -790,7 +799,7 @@ def _all_run_times_by_key(db) -> dict[tuple[str, str], list]:
     rows = db.execute(
         select(PriceObservation.vendor_id, PriceObservation.query_object_id,
                PriceObservation.observed_at)
-        .where(PriceObservation.status != "error")
+        .where(PriceObservation.status != "error", PriceObservation.excluded.is_(False))
         .order_by(PriceObservation.observed_at.desc())
     ).all()
     out: dict[tuple[str, str], list] = {}
@@ -1090,14 +1099,15 @@ def _drop_reason_group(reason: str) -> str:
 
 def _previous_clean_runs(db, obs: PriceObservation, n: int) -> list[PriceObservation]:
     """Up to ``n`` runs of the same product at the same vendor just before this
-    one, newest first, skipping errored runs -- they prove nothing about what
-    was listed."""
+    one, newest first, skipping errored runs and runs left out of trends --
+    they prove nothing about what was listed."""
     return list(db.scalars(
         select(PriceObservation)
         .where(
             PriceObservation.vendor_id == obs.vendor_id,
             PriceObservation.query_object_id == obs.query_object_id,
             PriceObservation.status != "error",
+            PriceObservation.excluded.is_(False),
             PriceObservation.observed_at < obs.observed_at,
         )
         .order_by(PriceObservation.observed_at.desc())
@@ -1188,8 +1198,23 @@ def run_detail(job_id: str):
         changes=_run_changes(db, job, listings, obs),
         schedule=db.get(Schedule, job.schedule_id) if job.schedule_id else None,
         product=db.get(QueryObject, job.query_object_id),
+        anomalies=db.scalars(select(Anomaly).where(Anomaly.job_id == job_id).order_by(Anomaly.id)).all(),
         vmap=_vendor_map(db), qmap=_query_map(db),
     )
+
+
+@bp.post("/runs/<job_id>/trends")
+def set_run_in_trends(job_id: str):
+    """Leave a run out of price trends, or put it back."""
+    db = get_db()
+    obs = db.scalars(select(PriceObservation).where(PriceObservation.job_id == job_id)).first()
+    if obs is None:
+        flash("this run has no result to include or leave out", "error")
+    else:
+        obs.excluded = request.form.get("include") != "1"
+        db.commit()
+        flash("run left out of price trends" if obs.excluded else "run counted in price trends again", "ok")
+    return redirect(url_for("ui.run_detail", job_id=job_id))
 
 
 @bp.get("/jobs/<job_id>")

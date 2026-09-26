@@ -22,8 +22,8 @@ from orchestrator.benchmarks import (
     gpu_brand,
     match_benchmark,
 )
-from orchestrator.api.ingest import lowest_non_auction_price, price_metrics
-from orchestrator.models import Listing, PriceObservation, QueryObject, TrackedListing, Vendor
+from orchestrator.models import PriceObservation, QueryObject, Vendor
+from orchestrator.prices import recompute_observations
 from orchestrator.ui.insights import _export
 from orchestrator.ui.views import _as_utc
 
@@ -38,10 +38,22 @@ def _latest_prices(db, vendor_id: str, price_field: str) -> dict[str, tuple[floa
     col = getattr(PriceObservation, price_field)
     rows = db.execute(
         select(PriceObservation.query_object_id, col, PriceObservation.observed_at)
-        .where(PriceObservation.vendor_id == vendor_id, col.is_not(None))
+        .where(PriceObservation.vendor_id == vendor_id, col.is_not(None), PriceObservation.excluded.is_(False))
         .order_by(PriceObservation.observed_at.asc())
     ).all()
     return {qid: (price, _as_utc(at)) for qid, price, at in rows}
+
+
+def _latest_run_times(db, vendor_id: str) -> dict[str, object]:
+    """``{query_object_id: observed_at}`` of each query's newest run at this
+    vendor, whatever its outcome -- to tell when the price shown comes from an
+    older run because the newest one failed or had no usable price."""
+    rows = db.execute(
+        select(PriceObservation.query_object_id, func.max(PriceObservation.observed_at))
+        .where(PriceObservation.vendor_id == vendor_id)
+        .group_by(PriceObservation.query_object_id)
+    ).all()
+    return {qid: _as_utc(at) for qid, at in rows}
 
 
 def _default_vendor(db, vendors: list[Vendor]) -> str | None:
@@ -58,40 +70,6 @@ def _default_vendor(db, vendors: list[Vendor]) -> str | None:
     return vendors[0].identifier if vendors else None
 
 
-def recompute_observations(db, vendor_id: str) -> int:
-    """Rebuild this vendor's per-run price summaries from the listings still in
-    the database, so deleted or hidden listings stop counting towards the
-    chart. Runs with no stored listings left (e.g. purged) keep the worker's
-    figures, since there is nothing to recompute them from. Returns the number
-    of observations whose prices changed."""
-    observations = db.scalars(
-        select(PriceObservation).where(PriceObservation.vendor_id == vendor_id)
-    ).all()
-    by_job: dict[str, list[tuple[float, str, bool]]] = {}
-    for job_id, price, listing_type, hidden, tracked_hidden in db.execute(
-        select(Listing.job_id, Listing.price, Listing.listing_type, Listing.hidden, TrackedListing.hidden)
-        .outerjoin(TrackedListing, Listing.tracked_listing_id == TrackedListing.id)
-        .where(Listing.job_id.in_([o.job_id for o in observations]))
-    ):
-        by_job.setdefault(job_id, []).append((price, listing_type, bool(hidden or tracked_hidden)))
-
-    changed = 0
-    for obs in observations:
-        listings = by_job.get(obs.job_id)
-        if listings is None:
-            continue
-        visible = [(price, listing_type) for price, listing_type, hidden in listings if not hidden]
-        metrics = price_metrics([price for price, _ in visible])
-        metrics["price_low"] = lowest_non_auction_price(visible)
-        before = (obs.price_low, obs.price_mean, obs.price_median, obs.listings_kept)
-        for field, value in metrics.items():
-            setattr(obs, field, value)
-        if (obs.price_low, obs.price_mean, obs.price_median, obs.listings_kept) != before:
-            changed += 1
-    db.commit()
-    return changed
-
-
 def cost_per_frame_rows(db, bench_rows: list[dict], vendor_id: str, resolution: str,
                         price_field: str = "price_median") -> tuple[list[dict], list[QueryObject], list[dict]]:
     """Returns ``(rows, unmatched, unpriced)``:
@@ -101,6 +79,7 @@ def cost_per_frame_rows(db, bench_rows: list[dict], vendor_id: str, resolution: 
     - ``unpriced``: hierarchy matches this vendor has no price for yet.
     """
     prices = _latest_prices(db, vendor_id, price_field)
+    newest_runs = _latest_run_times(db, vendor_id)
     rows, unmatched, unpriced = [], [], []
     for q in db.scalars(select(QueryObject).order_by(QueryObject.id)).all():
         bench = match_benchmark(q.content or "", bench_rows)
@@ -124,6 +103,8 @@ def cost_per_frame_rows(db, bench_rows: list[dict], vendor_id: str, resolution: 
             "brand": gpu_brand(bench["name"]) or gpu_brand(q.content or ""),
             "price": round(price, 2),
             "observed_at": at,
+            # the newest run errored, was left out of trends, or had no price
+            "from_older_run": bool(at and newest_runs.get(q.id) and newest_runs[q.id] > at),
             "fps": fps,
             "cost_per_frame": round(price / fps, 2),
             "msrp": msrp,
@@ -184,7 +165,9 @@ def refresh_benchmarks():
 @bp.post("/cost-per-frame/recompute")
 def recompute_prices():
     vendor_id = request.form.get("vendor") or ""
-    changed = recompute_observations(get_db(), vendor_id)
+    db = get_db()
+    changed = recompute_observations(db, vendor_id)
+    db.commit()
     flash(f"Prices recalculated from current listings: {changed} run(s) updated.", "ok")
     return redirect(request.form.get("next") or url_for("cpf.cost_per_frame"))
 

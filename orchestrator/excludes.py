@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from orchestrator.models import Category, QueryObject, TrackedListing
+from orchestrator.prices import recompute_for_tracked
 
 
 def excluded_phrases_matched(
@@ -57,12 +58,14 @@ def apply_excludes_to_query(db: Session, q: QueryObject) -> int:
     rows = db.scalars(
         select(TrackedListing).where(TrackedListing.query_object_id == q.id, ~TrackedListing.hidden)
     ).all()
-    hidden = 0
+    newly_hidden = []
     for t in rows:
         if excluded_phrases_matched(t.title or "", exclude, case_sensitive=case_sensitive, operator=operator):
             t.hidden = True
-            hidden += 1
-    return hidden
+            newly_hidden.append(t.id)
+    # the runs they were in stop counting them towards their prices
+    recompute_for_tracked(db, newly_hidden)
+    return len(newly_hidden)
 
 
 def apply_excludes_to_category(db: Session, category: Category) -> int:

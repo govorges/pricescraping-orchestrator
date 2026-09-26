@@ -98,7 +98,7 @@
          data-gpu="{{ r.gpu }}" data-brand="{{ brands.get(r.brand, '') }}" data-price="{{ '%.2f' % r.price }}" data-fps="{{ r.fps }}"
          data-cpf="{{ '%.2f' % r.cost_per_frame }}"
          data-msrp="{{ '%.2f' % r.msrp_cost_per_frame if r.msrp_cost_per_frame is not none else '' }}"
-         data-seen="{{ r.observed_at | reltime if r.observed_at else '' }}">
+         data-seen="{{ r.observed_at | reltime if r.observed_at else '' }}{{ ' (latest run had no usable price)' if r.from_older_run }}">
       <span class="cpf-label" title="{{ r.query }}">{{ r.gpu }}</span>
       {% set cw = (r.cost_per_frame / max_cpf * 100) | round(2) if max_cpf else 0 %}
       {% set fw = (r.fps / max_fps * 100) | round(2) if max_fps else 0 %}
@@ -138,7 +138,8 @@
         <td>{% if r.brand %}<i class="cpf-swatch brand-{{ r.brand }}"></i>{{ brands[r.brand] }}{% else %}—{% endif %}</td>
         <td><a href="{{ url_for('products.overview', qid=r.query_id) }}">{{ r.query }}</a></td>
         <td class="num tnum">${{ '{:,.2f}'.format(r.price) }}</td>
-        <td class="muted">{{ r.observed_at | reltime if r.observed_at else '—' }}</td>
+        <td class="muted">{{ r.observed_at | reltime if r.observed_at else '—' }}
+          {%- if r.from_older_run %} <span class="pill pill--warn" title="The newest run for this GPU here failed, was left out of trends or had no price, so this price comes from the run before it.">older run</span>{% endif %}</td>
         <td class="num tnum">{{ r.fps }}</td>
         <td class="num tnum"><b>${{ '%.2f' % r.cost_per_frame }}</b></td>
         <td class="num tnum">{% if r.msrp %}${{ '{:,.2f}'.format(r.msrp) }}{% else %}—{% endif %}</td>

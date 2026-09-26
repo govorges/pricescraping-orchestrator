@@ -3,6 +3,15 @@
 {% block title %}{{ q.content or q.id }}{% endblock %}
 
 {% block tab %}
+{% set top = product.open_anomalies[0] if product.open_anomalies else none %}
+{% if top %}
+<div class="anom-banner">
+  <i class="dot {{ 'crit' if top.severity == 'high' else ('warn' if top.severity == 'med' else 'info') }}"></i>
+  <span class="grow"><b>{{ top.title }}</b> <span class="muted">— {{ top.summary }}</span></span>
+  {% if product.open_anomalies | length > 1 %}<span class="mono">+{{ product.open_anomalies | length - 1 }} more</span>{% endif %}
+  <a href="{{ url_for('anomalies.inbox', qid=q.id, id=top.id) }}">Review →</a>
+</div>
+{% endif %}
 {% set by_vendor = stats.get('by_vendor') if stats else [] %}
 {% if by_vendor | length > 1 %}
 <div class="filter-chips" id="vendorFilter" style="margin-bottom:14px">
@@ -140,7 +149,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return span;
   }
   function draw() {
-    var rows = active ? HISTORY.filter(function (r) { return active.has(r.vendor_id); }) : HISTORY;
+    var rows = HISTORY.filter(function (r) { return !r.excluded && (!active || active.has(r.vendor_id)); });
     if (!rows.length) { svg.hidden = true; empty.hidden = false; legend.textContent = ""; return; }
     svg.hidden = false; empty.hidden = true;
     var byVendor = window.seriesByVendor(rows, "price_median", colorFor);

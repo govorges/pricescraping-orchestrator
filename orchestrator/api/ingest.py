@@ -86,6 +86,7 @@ def ingest_scrape_result():
     _replace_listings(db, result)
     _replace_dropped_listings(db, result)
     _upsert_job(db, result)
+    _detect_anomalies(db, result.job_id)
     db.commit()
 
     log.info(
@@ -96,6 +97,19 @@ def ingest_scrape_result():
         result.metrics.listings_kept,
     )
     return jsonify({"accepted": True}), 202
+
+
+def _detect_anomalies(db, job_id: str) -> None:
+    """Run the anomaly checks for this run inside a savepoint: a bug in a
+    check must never cost us the scrape result itself."""
+    from orchestrator.anomalies import detect_for_run  # imports this module
+
+    db.flush()
+    try:
+        with db.begin_nested():
+            detect_for_run(db, job_id)
+    except Exception:  # noqa: BLE001
+        log.exception("anomaly detection failed for job=%s", job_id)
 
 
 def parts_drop_reason(condition: str) -> str:
