@@ -81,11 +81,11 @@ def _obs(db, *, observed_at, status="ok"):
 
 
 def test_active_listing_counts_excludes_ended_and_hidden(db_session):
-    """A listing missing from the latest clean run doesn't count as active, and hidden listings never count at all."""
+    """A listing missing from the last two clean runs doesn't count as active, and hidden listings never count at all."""
     now = datetime.now(timezone.utc)
     earlier_run = now - timedelta(days=2)
 
-    # seen in the older run only -> missing from the latest clean run -> ended
+    # seen in the oldest run only -> missing from the last two clean runs -> ended
     _tracked(db_session, canonical_url="https://x/ended", last_seen_at=earlier_run)
     # seen in the latest clean run -> still active
     _tracked(db_session, canonical_url="https://x/still-active", last_seen_at=now)
@@ -93,6 +93,7 @@ def test_active_listing_counts_excludes_ended_and_hidden(db_session):
     _tracked(db_session, canonical_url="https://x/hidden", last_seen_at=now, hidden=True)
 
     _obs(db_session, observed_at=earlier_run)
+    _obs(db_session, observed_at=now - timedelta(days=1))
     _obs(db_session, observed_at=now)  # the latest trustworthy run
     db_session.flush()
 

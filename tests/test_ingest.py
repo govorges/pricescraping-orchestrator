@@ -78,8 +78,8 @@ def test_ingest_stores_dropped_listings_with_reasons(client):
         assert "Shop on eBay" in titles
 
 
-def test_job_detail_page_shows_dropped_listing_reasons(client):
-    """The rendered job detail page actually surfaces a dropped listing's title and reason to the operator."""
+def test_run_page_shows_dropped_listing_reasons(client):
+    """The rendered run page actually surfaces a dropped listing's title and reason to the operator."""
     job_id = "job-detail-drops"
     payload = {
         **RESULT,
@@ -88,7 +88,7 @@ def test_job_detail_page_shows_dropped_listing_reasons(client):
     }
     assert client.post(PATH, json=payload, headers=AUTH).status_code == 202
 
-    page = client.get(f"/jobs/{job_id}")
+    page = client.get(f"/runs/{job_id}")
     assert page.status_code == 200
     assert b"Sketchy Bundle" in page.data
     assert b"excluded_phrases_found" in page.data

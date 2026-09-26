@@ -53,7 +53,7 @@
   <li>
     <i class="dot {{ _status_dot(j.status) }}"></i>
     <span class="who">
-      <a href="{{ url_for('ui.job_detail', job_id=j.job_id) }}"><b>{{ vmap[j.vendor_id].name if j.vendor_id in vmap else j.vendor_id }}</b></a>
+      <a href="{{ url_for('ui.run_detail', job_id=j.job_id) }}"><b>{{ vmap[j.vendor_id].name if j.vendor_id in vmap else j.vendor_id }}</b></a>
       <span>· {{ qmap[j.query_object_id].content if j.query_object_id in qmap else j.query_object_id }}</span>
       <div class="line2">
         {%- if j.status == 'dead' %}dead — {{ j.error_type or 'max_attempts_exceeded' }}
@@ -65,7 +65,7 @@
     <span class="when">{{ j.result_at | reltime if j.result_at else j.created_at | reltime }}</span>
   </li>
 {% else %}
-  <li><span class="who muted">no jobs yet</span></li>
+  <li><span class="who muted">no runs yet</span></li>
 {% endfor %}
 </ul>
 {%- endmacro %}
@@ -73,9 +73,9 @@
 {% macro job_table(jobs, vmap, qmap, show_cancel=True) -%}
 <div class="table-wrap"><table>
   <thead><tr>
-    <th>Job <span class="subid">job_id</span></th>
+    <th>Run <span class="subid">job_id</span></th>
     <th>Vendor</th>
-    <th>Query object</th>
+    <th>Product</th>
     <th>Status</th>
     <th class="num">Duration <span class="subid">ms</span></th>
     <th>Created <span class="subid">UTC</span></th>
@@ -84,7 +84,7 @@
   <tbody>
   {% for j in jobs %}
     <tr>
-      <td><a href="{{ url_for('ui.job_detail', job_id=j.job_id) }}" class="mono">{{ j.job_id[:8] }}</a></td>
+      <td><a href="{{ url_for('ui.run_detail', job_id=j.job_id) }}" class="mono">{{ j.job_id[:8] }}</a></td>
       <td>{{ vendor_label(j.vendor_id, vmap) }}</td>
       <td>{{ query_label(j.query_object_id, qmap) }}</td>
       <td>{{ status_badge(j.status) }}</td>
@@ -94,7 +94,7 @@
       <td>
         {% if j.status in ('queued', 'running') %}
         <form class="inline" method="post" action="{{ url_for('ui.cancel_job', job_id=j.job_id) }}"
-              onsubmit="return confirm('Cancel job {{ j.job_id[:8] }} and remove it from the queue?')">
+              onsubmit="return confirm('Cancel run {{ j.job_id[:8] }} and remove it from the queue?')">
           <button class="danger sm" type="submit">Cancel</button>
         </form>
         {% endif %}
@@ -102,7 +102,7 @@
       {% endif %}
     </tr>
   {% else %}
-    <tr><td colspan="{{ 7 if show_cancel else 6 }}" class="muted">no jobs match</td></tr>
+    <tr><td colspan="{{ 7 if show_cancel else 6 }}" class="muted">no runs match</td></tr>
   {% endfor %}
   </tbody>
 </table></div>

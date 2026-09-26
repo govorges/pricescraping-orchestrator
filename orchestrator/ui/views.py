@@ -26,6 +26,7 @@ from orchestrator.models import (
     DroppedListing,
     Job,
     Listing,
+    ListingPricePoint,
     Node,
     PriceObservation,
     QueryObject,
@@ -210,7 +211,8 @@ def _attention(db, queue: dict, nodes) -> list[dict]:
         items.append({"level": "crit", "text": f"Redis unreachable — {queue.get('error', 'no connection')}"})
     if queue.get("deadletter"):
         items.append({"level": "crit",
-                      "text": f"{queue['deadletter']} job(s) in the dead-letter stream", "href": "nodes"})
+                      "text": f"{queue['deadletter']} run(s) in the dead-letter stream",
+                      "href": "runs", "args": {"status": "dead"}})
     for n in nodes:
         if (n.replicas_running or 0) < (n.replicas_desired or 0):
             items.append({"level": "warn",
@@ -597,7 +599,7 @@ def _active_listing_counts(db) -> dict[str, int]:
     for qid, vid, last_seen in rows:
         seen = _as_utc(last_seen)
         newer = [r for r in run_times.get((vid, qid), []) if seen is None or r > seen]
-        if not newer:
+        if len(newer) < ENDED_AFTER_MISSED_RUNS:
             counts[qid] = counts.get(qid, 0) + 1
     return counts
 
@@ -663,9 +665,11 @@ def delete_query(qid: str):
     db = get_db()
     q = db.get(QueryObject, qid)
     if q:
-        db.delete(q)
+        n = len(q.schedules)
+        db.delete(q)  # its schedules go with it (QueryObject.schedules cascade)
         db.commit()
-        flash(f"product '{qid}' deleted", "ok")
+        _reload_scheduler()
+        flash(f"product '{qid}' deleted" + (f" along with its {n} schedule(s)" if n else ""), "ok")
     return redirect(url_for("products.products_list"))
 
 
@@ -683,6 +687,12 @@ def apply_query_excludes(qid: str):
     flash(f"hid {n} existing listing(s) for '{qid}' matching its exclude phrases", "ok")
     return redirect(url_for("products.settings", qid=qid))
 
+
+# A listing absent from this many of its vendor's latest clean runs in a row
+# is treated as sold or ended. One miss isn't enough: search results shuffle
+# between runs, so a listing that's still for sale often drops off one page
+# of results and comes back on the next run.
+ENDED_AFTER_MISSED_RUNS = 2
 
 TRACKED_LISTING_SORTS = {
     "last_seen": TrackedListing.last_seen_at.desc(),
@@ -717,12 +727,13 @@ def _run_times_by_vendor(db, qid: str) -> dict[str, list]:
 
 def _annotate_activity(rows, runs_by_vendor: dict[str, list]) -> None:
     """Attach ``.active`` / ``.runs_missed`` to each TrackedListing in place. A
-    listing not present in its vendor's latest run has probably sold or ended."""
+    listing missing from its vendor's last ``ENDED_AFTER_MISSED_RUNS`` clean
+    runs has probably sold or ended."""
     for t in rows:
         seen = _as_utc(t.last_seen_at)
         newer = [r for r in runs_by_vendor.get(t.vendor_id, []) if seen is None or r > seen]
         t.runs_missed = len(newer)
-        t.active = not newer
+        t.active = t.runs_missed < ENDED_AFTER_MISSED_RUNS
 
 
 @bp.get("/queries/<qid>/listings")
@@ -812,7 +823,7 @@ def tracked_listings():
         newer = [r for r in runs.get((t.vendor_id, t.query_object_id), [])
                  if seen is None or r > seen]
         t.runs_missed = len(newer)
-        t.active = not newer
+        t.active = t.runs_missed < ENDED_AFTER_MISSED_RUNS
 
     status = request.args.get("status", "all")
     if status == "active":
@@ -926,7 +937,7 @@ def run_schedule(sid: int):
     try:
         job_id, _ = enqueue_for_schedule(db, s, scheduled_by="panel:run-now")
         db.commit()
-        flash(f"queued job {job_id}", "ok")
+        flash(f"queued run {job_id[:8]}", "ok")
     except Exception as exc:  # noqa: BLE001
         flash(f"enqueue failed: {exc}", "error")
     return redirect(_local_next() or url_for("ui.schedules"))
@@ -1028,31 +1039,137 @@ def run_category_schedule(sid: int):
     return redirect(url_for("ui.schedules"))
 
 
-# ---- jobs ----
+# ---- runs (one scrape of one product at one vendor; a ``Job`` row) ----
 
 
-@bp.get("/jobs")
-def jobs():
+@bp.get("/runs")
+def runs():
     db = get_db()
+    dead = []
+    if request.args.get("status") == "dead":
+        try:
+            dead = read_deadletter(50, settings=_settings())
+        except Exception:  # noqa: BLE001
+            pass
     return render_template(
-        "jobs.html",
+        "runs.html",
         jobs=_jobs_query(db, request.args),
         vendors=db.scalars(select(Vendor).order_by(Vendor.identifier)).all(),
         vmap=_vendor_map(db),
         qmap=_query_map(db),
         args=request.args,
         counts=_job_counts(db),
+        deadletter=dead,
     )
 
 
-@bp.get("/jobs/<job_id>")
-def job_detail(job_id: str):
+@bp.get("/jobs")
+def jobs():
+    """Old Jobs page -- now Runs."""
+    return redirect(url_for("ui.runs", **request.args), code=301)
+
+
+def _drop_reason_group(reason: str) -> str:
+    """A short label for why a listing wasn't kept, so a run's drops can be
+    summarised ("9 excluded phrase · 3 below minimum price") instead of listed."""
+    r = reason or ""
+    if r.startswith("excluded_phrases_found"):
+        return "excluded phrase"
+    if r.startswith("phrases_not_found"):
+        return "search phrase missing"
+    if r.startswith("missing required field"):
+        return "missing fields"
+    if r.startswith("condition_for_parts"):
+        return "for parts"
+    if "not greater than MinimumValue" in r:
+        return "below minimum price"
+    if "MaximumValue" in r:
+        return "above maximum price"
+    return r.split(":")[0][:40] or "other"
+
+
+def _previous_clean_runs(db, obs: PriceObservation, n: int) -> list[PriceObservation]:
+    """Up to ``n`` runs of the same product at the same vendor just before this
+    one, newest first, skipping errored runs -- they prove nothing about what
+    was listed."""
+    return list(db.scalars(
+        select(PriceObservation)
+        .where(
+            PriceObservation.vendor_id == obs.vendor_id,
+            PriceObservation.query_object_id == obs.query_object_id,
+            PriceObservation.status != "error",
+            PriceObservation.observed_at < obs.observed_at,
+        )
+        .order_by(PriceObservation.observed_at.desc())
+        .limit(n)
+    ).all())
+
+
+def _run_changes(db, job: Job, listings, obs: PriceObservation | None) -> dict:
+    """What this run changed compared with the one before it: listings seen
+    for the first time, listings whose price moved, and listings this run
+    counts as gone -- missing for the ``ENDED_AFTER_MISSED_RUNS``-th clean run
+    in a row, so each ended listing is reported once, by the run that ended it."""
+    tracked_ids = {l.tracked_listing_id for l in listings if l.tracked_listing_id}
+    points = db.scalars(
+        select(ListingPricePoint)
+        .where(ListingPricePoint.tracked_listing_id.in_(tracked_ids))
+        .order_by(ListingPricePoint.observed_at.asc())
+    ).all() if tracked_ids else []
+    by_tracked: dict[int, list] = {}
+    for p in points:
+        by_tracked.setdefault(p.tracked_listing_id, []).append(p)
+
+    new, moved = [], []
+    for l in listings:
+        history = by_tracked.get(l.tracked_listing_id, [])
+        idx = next((i for i, p in enumerate(history) if p.job_id == job.job_id), None)
+        if idx is None:
+            continue
+        if idx == 0:
+            new.append({"listing": l, "price": l.price})
+        elif history[idx - 1].price != l.price:
+            before = history[idx - 1].price
+            moved.append({"listing": l, "before": before, "price": l.price,
+                          "delta": l.price - before,
+                          "pct": (l.price - before) / before * 100 if before else None})
+    moved.sort(key=lambda m: abs(m["pct"] or 0), reverse=True)
+
+    def seen_in(run: PriceObservation) -> set[int]:
+        return set(db.scalars(
+            select(ListingPricePoint.tracked_listing_id).where(ListingPricePoint.job_id == run.job_id)
+        ).all())
+
+    ended, missing = [], 0
+    earlier = (_previous_clean_runs(db, obs, ENDED_AFTER_MISSED_RUNS)
+               if obs is not None and obs.status != "error" else [])
+    if earlier:
+        seen_since = set()  # listings seen in any run after the oldest one checked
+        for run in earlier[:-1]:
+            seen_since |= seen_in(run)
+        missing = len(seen_in(earlier[0]) - tracked_ids)
+        if len(earlier) == ENDED_AFTER_MISSED_RUNS:
+            gone = seen_in(earlier[-1]) - seen_since - tracked_ids
+            if gone:
+                ended = db.scalars(
+                    select(TrackedListing).where(TrackedListing.id.in_(gone))
+                    .order_by(TrackedListing.last_price.asc())
+                ).all()
+    return {"new": new, "moved": moved, "ended": list(ended),
+            "previous": earlier[0] if earlier else None,
+            "missing": missing, "seen_before": len(tracked_ids) - len(new)}
+
+
+@bp.get("/runs/<job_id>")
+def run_detail(job_id: str):
     db = get_db()
     job = db.get(Job, job_id)
     if job is None:
-        flash("job not found", "error")
-        return redirect(url_for("ui.jobs"))
-    listings = db.scalars(select(Listing).where(Listing.job_id == job_id)).all()
+        flash("run not found", "error")
+        return redirect(url_for("ui.runs"))
+    listings = db.scalars(
+        select(Listing).where(Listing.job_id == job_id).order_by(Listing.price.asc())
+    ).all()
     dropped = db.scalars(
         select(DroppedListing).where(DroppedListing.job_id == job_id)
     ).all()
@@ -1061,10 +1178,24 @@ def job_detail(job_id: str):
         .where(PriceObservation.job_id == job_id)
         .order_by(PriceObservation.observed_at.desc())
     ).first()
+    drop_groups: dict[str, int] = {}
+    for d in dropped:
+        g = _drop_reason_group(d.reason)
+        drop_groups[g] = drop_groups.get(g, 0) + 1
     return render_template(
-        "job_detail.html", job=job, listings=listings, dropped=dropped, obs=obs,
+        "run_detail.html", job=job, listings=listings, dropped=dropped, obs=obs,
+        drop_groups=sorted(drop_groups.items(), key=lambda kv: -kv[1]),
+        changes=_run_changes(db, job, listings, obs),
+        schedule=db.get(Schedule, job.schedule_id) if job.schedule_id else None,
+        product=db.get(QueryObject, job.query_object_id),
         vmap=_vendor_map(db), qmap=_query_map(db),
     )
+
+
+@bp.get("/jobs/<job_id>")
+def job_detail(job_id: str):
+    """Old Job detail page -- now the run page."""
+    return redirect(url_for("ui.run_detail", job_id=job_id), code=301)
 
 
 @bp.post("/jobs/<job_id>/cancel")
@@ -1072,16 +1203,16 @@ def cancel_job(job_id: str):
     db = get_db()
     j = db.get(Job, job_id)
     if j is None:
-        flash("job not found", "error")
+        flash("run not found", "error")
     elif j.status not in ("queued", "running"):
-        flash(f"job is already {j.status}, nothing to cancel", "error")
+        flash(f"run is already {j.status}, nothing to cancel", "error")
     else:
         if j.msg_id:
             delete_message(j.msg_id, settings=_settings())
         j.status = "canceled"
         db.commit()
-        flash(f"job {job_id[:8]} canceled and removed from the queue", "ok")
-    return redirect(request.referrer or url_for("ui.jobs"))
+        flash(f"run {job_id[:8]} canceled and removed from the queue", "ok")
+    return redirect(request.referrer or url_for("ui.runs"))
 
 
 @bp.post("/queue/purge")
@@ -1093,8 +1224,8 @@ def purge_queue_view():
         j.status = "canceled"
         n += 1
     db.commit()
-    flash(f"purged {removed} queued message(s); marked {n} job(s) canceled", "ok")
-    return redirect(request.referrer or url_for("ui.jobs"))
+    flash(f"purged {removed} queued message(s); marked {n} run(s) canceled", "ok")
+    return redirect(request.referrer or url_for("ui.runs"))
 
 
 # ---- nodes ----
@@ -1104,16 +1235,10 @@ def purge_queue_view():
 def nodes():
     db = get_db()
     rows = db.scalars(select(Node).order_by(Node.id)).all()
-    dead = []
-    try:
-        dead = read_deadletter(25, settings=_settings())
-    except Exception:  # noqa: BLE001
-        pass
     return render_template(
         "nodes.html",
         nodes=rows,
         settings=_settings(),
-        deadletter=dead,
         worker_env=_settings().worker_base_env(),
         jobs_per_min=_jobs_per_min_by_node(db),
     )

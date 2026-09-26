@@ -142,6 +142,27 @@
     }
   };
 
+  // One line per vendor on a shared, time-ordered axis. Vendors are scraped at
+  // different moments and price the same product differently, so one line
+  // through every row zigzags between them; here each vendor's points sit at
+  // its own timestamps with gaps (null) elsewhere, which drawLineChart bridges.
+  // colorFor(vendorId, i) keeps a vendor's colour stable when others are hidden.
+  window.seriesByVendor = function (rows, field, colorFor) {
+    var sorted = rows.slice().sort(function (a, b) {
+      return a.observed_at < b.observed_at ? -1 : a.observed_at > b.observed_at ? 1 : 0;
+    });
+    var vendors = [];
+    sorted.forEach(function (r) { if (vendors.indexOf(r.vendor_id) === -1) vendors.push(r.vendor_id); });
+    return {
+      rows: sorted,
+      xs: sorted.map(function (r) { return r.observed_at; }),
+      series: vendors.map(function (v, i) {
+        return { name: v, color: colorFor ? colorFor(v, i) : undefined,
+                 points: sorted.map(function (r) { return r.vendor_id === v ? r[field] : null; }) };
+      }),
+    };
+  };
+
   function redrawChart(svg) {
     var fn = svg._redraw;
     if (typeof fn === "function") fn();

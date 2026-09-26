@@ -1,6 +1,5 @@
 {% extends "_product.html" %}
 {% from "_macros.html" import hint, status_badge, vendor_tip %}
-{% set latest = stats.get('latest') if stats else none %}
 {% block title %}{{ q.content or q.id }}{% endblock %}
 
 {% block tab %}
@@ -16,9 +15,10 @@
 
 <div class="vitals">
   <div class="vital">
-    <span class="lbl">Current median</span>
-    <span class="val tnum">{% if latest and latest.price_median is not none %}${{ latest.price_median | round | int }}{% else %}—{% endif %}</span>
-    <span class="meta">{% if change_7d is not none %}<span class="delta {{ 'up' if change_7d < 0 else 'down' }}">{{ '%+.1f%%' % change_7d }}</span> vs 7d ago{% else %}no history yet{% endif %}</span>
+    <span class="lbl">Current median {{ hint("The median of each vendor's latest median, so one vendor's pricing doesn't stand in for the product. Changes compare each vendor with its own earlier price, then average across vendors.") }}</span>
+    <span class="val tnum">{% if current_median is not none %}${{ current_median | round | int }}{% else %}—{% endif %}</span>
+    <span class="meta">{% if change_7d is not none %}<span class="delta {{ 'up' if change_7d < 0 else 'down' }}">{{ '%+.1f%%' % change_7d }}</span> vs 7d ago{% elif current_median is not none %}needs a second run{% else %}no history yet{% endif %}
+      {%- if vendors_in_current > 1 %} · {{ vendors_in_current }} vendors{% endif %}</span>
   </div>
   <div class="vital">
     <span class="lbl">30-day change</span>
@@ -31,7 +31,7 @@
     <span class="meta">across {{ stats.get('observations', 0) }} run{{ 's' if stats.get('observations') != 1 }}</span>
   </div>
   <div class="vital">
-    <span class="lbl">Volatility {{ hint("Population standard deviation of the median price across every observation. Higher means the price swings around more.") }}</span>
+    <span class="lbl">Volatility {{ hint("How much each vendor's median price swings between runs (standard deviation), averaged across vendors. Higher means the price moves around more.") }}</span>
     <span class="val tnum">{% if volatility is not none %}${{ volatility | round | int }}{% else %}—{% endif %}</span>
     <span class="meta">std dev of median</span>
   </div>
@@ -53,10 +53,7 @@
     </header>
     <svg class="chart" id="insightChart" viewBox="0 0 760 260" role="img" aria-label="Price history"></svg>
     <div class="chart-empty" id="insightEmpty" hidden>No price observations yet — run a schedule to populate this.</div>
-    <p class="legend" style="margin-top:8px">
-      <span><i style="background:#2f6fed"></i>median</span>
-      <span><i style="background:#22c55e"></i>low (excl. auctions)</span>
-    </p>
+    <p class="legend" id="insightLegend" style="margin-top:8px"></p>
   </div>
 
   <div class="stack">
@@ -107,7 +104,7 @@
         <td class="num tnum">{% if o.price_mean is not none %}${{ o.price_mean | round | int }}{% else %}—{% endif %}</td>
         <td class="num tnum">{% if o.price_median is not none %}${{ o.price_median | round | int }}{% else %}—{% endif %}</td>
         <td class="num tnum">{{ o.listings_kept }}</td>
-        <td class="num"><a href="{{ url_for('ui.job_detail', job_id=o.job_id) }}" title="{{ o.job_id }}">Open run</a></td>
+        <td class="num"><a href="{{ url_for('ui.run_detail', job_id=o.job_id) }}" title="{{ o.job_id }}">Open run</a></td>
       </tr>
     {% else %}
       <tr><td colspan="8" class="muted">no observations yet</td></tr>
@@ -130,20 +127,39 @@ document.addEventListener("DOMContentLoaded", function () {
   function fmtDate(iso) {
     var d = new Date(iso); return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   }
+  // vendor lines skip green, which is kept for the low line
+  var VENDOR_COLORS = ["#2f6fed", "#f5a623", "#a855f7", "#14b8a6", "#fb923c", "#ef4444", "#8b93ab"];
+  var VENDORS = {{ by_vendor | map(attribute='vendor_id') | list | tojson }};
+  var VNAMES = { {% for v in by_vendor %}{{ v.vendor_id | tojson }}: {{ (vmap[v.vendor_id].name if v.vendor_id in vmap and vmap[v.vendor_id].name else v.vendor_id) | tojson }}{{ ',' if not loop.last }}{% endfor %} };
+  var legend = document.getElementById("insightLegend");
+  function colorFor(v) { var i = VENDORS.indexOf(v); return VENDOR_COLORS[(i < 0 ? 0 : i) % VENDOR_COLORS.length]; }
+  function legendItem(color, text) {
+    var span = document.createElement("span"), dot = document.createElement("i");
+    dot.style.background = color;
+    span.appendChild(dot); span.appendChild(document.createTextNode(text));
+    return span;
+  }
   function draw() {
     var rows = active ? HISTORY.filter(function (r) { return active.has(r.vendor_id); }) : HISTORY;
-    if (!rows.length) { svg.hidden = true; empty.hidden = false; return; }
+    if (!rows.length) { svg.hidden = true; empty.hidden = false; legend.textContent = ""; return; }
     svg.hidden = false; empty.hidden = true;
-    var xs = rows.map(function (r) { return r.observed_at; });
-    var median = rows.map(function (r) { return r.price_median; });
-    var low = rows.map(function (r) { return r.price_low; });
+    var byVendor = window.seriesByVendor(rows, "price_median", colorFor);
+    // lowest price anywhere: each vendor's latest low carried forward, min across vendors
+    var lastLow = {};
+    var low = byVendor.rows.map(function (r) {
+      if (r.price_low != null) lastLow[r.vendor_id] = r.price_low;
+      var lows = Object.keys(lastLow).map(function (k) { return lastLow[k]; });
+      return lows.length ? Math.min.apply(null, lows) : null;
+    });
+    var xs = byVendor.xs;
     var labels = xs.length > 5
       ? [0, 0.25, 0.5, 0.75, 1].map(function (f) { return fmtDate(xs[Math.round(f * (xs.length - 1))]); })
       : xs.map(fmtDate);
-    window.drawLineChart(svg, [
-      { name: "median", points: median, color: "#2f6fed" },
-      { name: "low", points: low, color: "#22c55e" },
-    ], { xlabels: labels });
+    var series = byVendor.series.concat([{ name: "low", points: low, color: "#22c55e" }]);
+    window.drawLineChart(svg, series, { xlabels: labels });
+    legend.textContent = "";
+    byVendor.series.forEach(function (s) { legend.appendChild(legendItem(s.color, (VNAMES[s.name] || s.name) + " median")); });
+    legend.appendChild(legendItem("#22c55e", "lowest anywhere (excl. auctions)"));
   }
   function applyRowFilters() {
     document.querySelectorAll("[data-vendor-row]").forEach(function (row) {

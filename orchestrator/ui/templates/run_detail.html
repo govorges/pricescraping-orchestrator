@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge, hint %}
+{% set pname = (product.content or product.id) if product else job.query_object_id %}
+{% set vname = vmap[job.vendor_id].name if job.vendor_id in vmap and vmap[job.vendor_id].name else job.vendor_id %}
+{% set CAP = 15 %}
+{% macro money(v) %}{% if v is not none %}${{ '{:,}'.format(v | round | int) }}{% else %}—{% endif %}{% endmacro %}
+{% macro listing_link(tracked_id, title) -%}
+  {% if tracked_id %}<a href="{{ url_for('ui.tracked_listing_detail', tracked_id=tracked_id) }}">{{ title or '(no title)' }}</a>
+  {% else %}{{ title or '(no title)' }}{% endif %}
+{%- endmacro %}
+
+{% block title %}Run {{ job.job_id[:8] }}{% endblock %}
+{% block heading %}{{ pname }} <span class="muted" style="font-weight:400">at</span> {{ vname }}{% endblock %}
+{% block action %}
+  {% if schedule %}
+  <form class="inline" method="post" action="{{ url_for('ui.run_schedule', sid=schedule.id) }}">
+    <input type="hidden" name="next" value="{{ request.path }}">
+    <button class="btn ghost" type="submit" title="Run this product at this vendor again now">Re-run</button>
+  </form>
+  {% endif %}
+  {% if job.status in ('queued', 'running') %}
+  <form class="inline" method="post" action="{{ url_for('ui.cancel_job', job_id=job.job_id) }}"
+        onsubmit="return confirm('Cancel this run and remove it from the queue?')">
+    <button class="btn danger" type="submit">Cancel run</button>
+  </form>
+  {% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="product-head">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="{{ url_for('ui.runs') }}">Runs</a><span>/</span><span class="mono">{{ job.job_id[:8] }}</span>
+  </nav>
+  {{ status_badge(job.status) }}
+  <span class="muted">
+    {{ job.created_at.strftime('%b %d, %H:%M') if job.created_at else '—' }} UTC
+    {%- if job.duration_ms is not none %} · {{ '%.1fs' % (job.duration_ms / 1000) }}{% endif %}
+    {%- if job.node_id %} · node <span class="mono">{{ job.node_id }}</span>{% endif %}
+  </span>
+</div>
+
+{% if job.error_type %}
+<div class="note warn" style="margin-bottom:16px">
+  <b>{{ job.error_type }}</b>{% if job.error_message %} <span class="muted">— {{ job.error_message }}</span>{% endif %}
+</div>
+{% endif %}
+
+<div class="vitals">
+  <div class="vital">
+    <span class="lbl">Found on page</span>
+    <span class="val tnum">{{ obs.listings_found if obs else '—' }}</span>
+    <span class="meta">{{ 'before filtering' if obs else 'no result reported' }}</span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Kept</span>
+    <span class="val tnum">{{ listings | length }}</span>
+    <span class="meta">{{ changes.new | length }} new · {{ changes.seen_before }} seen before</span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Not kept</span>
+    <span class="val tnum">{{ dropped | length }}</span>
+    <span class="meta">{% for g, n in drop_groups[:2] %}{{ n }} {{ g }}{{ ' · ' if not loop.last }}{% else %}nothing dropped{% endfor %}</span>
+  </div>
+  <div class="vital">
+    <span class="lbl">Median · low {{ hint("The low price leaves out auctions -- a current bid isn't a price you can buy at.") }}</span>
+    <span class="val tnum">{% if obs %}{{ money(obs.price_median) }} · {{ money(obs.price_low) }}{% else %}—{% endif %}</span>
+    <span class="meta">{% if product %}recorded on <a href="{{ url_for('products.overview', qid=product.id) }}">{{ pname }}</a>{% else %}product deleted{% endif %}</span>
+  </div>
+</div>
+
+<div class="row split">
+  <div class="stack">
+    <div class="panel">
+      <header>
+        <h2>What changed in this run</h2>
+        <span class="sub">
+          {% if changes.previous %}since the <a href="{{ url_for('ui.run_detail', job_id=changes.previous.job_id) }}">previous run</a> {{ changes.previous.observed_at | reltime }}
+          {% elif obs and obs.status != 'error' %}first run for this product at this vendor
+          {% else %}nothing to compare{% endif %}
+        </span>
+        {% if product and listings %}
+        <span class="right"><a href="{{ url_for('products.listings', qid=product.id, vendor_id=job.vendor_id) }}">All listings for {{ pname }} →</a></span>
+        {% endif %}
+      </header>
+      {% set any_change = changes.moved or changes.new or changes.ended %}
+      <div class="table-wrap"><table>
+        <thead><tr><th>Listing</th><th>Change</th><th class="num">Price</th></tr></thead>
+        <tbody>
+        {% for m in changes.moved[:CAP] %}
+          <tr>
+            <td>{{ listing_link(m.listing.tracked_listing_id, m.listing.title) }}</td>
+            <td style="white-space:nowrap"><span class="delta {{ 'up' if m.delta < 0 else 'down' }}">{{ '+' if m.delta > 0 else '−' }}{{ money(m.delta | abs) }}</span>
+              <span class="muted">from {{ money(m.before) }}</span></td>
+            <td class="num tnum">{{ money(m.price) }}</td>
+          </tr>
+        {% endfor %}
+        {% for n in changes.new[:CAP] %}
+          <tr>
+            <td>{{ listing_link(n.listing.tracked_listing_id, n.listing.title) }}</td>
+            <td><span class="tag tag--cat">new</span></td>
+            <td class="num tnum">{{ money(n.price) }}</td>
+          </tr>
+        {% endfor %}
+        {% for t in changes.ended[:CAP] %}
+          <tr>
+            <td>{{ listing_link(t.id, t.title or t.canonical_url) }}</td>
+            <td style="white-space:nowrap"><span class="badge canceled" title="Missing from this run and the one before it -- probably sold or ended">gone</span></td>
+            <td class="num tnum muted">{{ money(t.last_price) }}</td>
+          </tr>
+        {% endfor %}
+        {% if not any_change %}
+          <tr><td colspan="3" class="muted">No new, repriced or vanished listings.</td></tr>
+        {% endif %}
+        {% if changes.missing %}
+          <tr><td colspan="3" class="muted">{{ changes.missing }} listing{{ 's' if changes.missing != 1 }} from the previous run {{ "aren't" if changes.missing != 1 else "isn't" }} in this one — counted as gone only if the next run misses {{ 'them' if changes.missing != 1 else 'it' }} too, since search results shuffle between runs.</td></tr>
+        {% endif %}
+        {% set hidden_rows = [changes.moved | length - CAP, 0] | max + [changes.new | length - CAP, 0] | max + [changes.ended | length - CAP, 0] | max %}
+        {% if hidden_rows %}
+          <tr><td colspan="3" class="muted">+{{ hidden_rows }} more — see all kept listings below</td></tr>
+        {% endif %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <details class="panel">
+      <summary><b>All {{ listings | length }} kept listings</b> <span class="muted">— cheapest first</span></summary>
+      <div class="table-wrap" style="margin-top:12px"><table>
+        <thead><tr><th>Title</th><th class="num">Price</th><th>Type</th><th></th></tr></thead>
+        <tbody>
+        {% for l in listings %}
+          <tr>
+            <td>{{ listing_link(l.tracked_listing_id, l.title) }}{% if l.hidden %} <span class="badge canceled">hidden</span>{% endif %}</td>
+            <td class="num tnum">{{ money(l.price) }}</td>
+            <td><span class="badge {{ l.listing_type }}">{{ l.listing_type }}</span></td>
+            <td>{% if l.link %}<a href="{{ l.link }}" target="_blank" rel="noopener">open ↗</a>{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">no listings kept</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </details>
+
+    <div class="panel">
+      <header>
+        <h2>Not kept</h2>
+        <span class="sub">found on the page, but dropped before becoming a listing</span>
+        {% if product %}<span class="right"><a href="{{ url_for('products.settings', qid=product.id) }}">Edit filters →</a></span>{% endif %}
+      </header>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Title</th><th>Reason</th></tr></thead>
+        <tbody>
+        {% for d in dropped %}
+          <tr>
+            <td>{{ d.title or '(no title extracted)' }}</td>
+            <td class="muted">{{ d.reason }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="2" class="muted">nothing was dropped — every listing found was kept</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <header><h2>Run details</h2></header>
+    <div class="dl">
+      <dt>Product</dt><dd>{% if product %}<a href="{{ url_for('products.overview', qid=product.id) }}">{{ pname }}</a>{% else %}<span class="mono">{{ job.query_object_id }}</span>{% endif %}</dd>
+      <dt>Vendor</dt><dd>{{ vname }}</dd>
+      <dt>Triggered by</dt><dd>{{ job.scheduled_by or '—' }}</dd>
+      <dt>Schedule</dt><dd>{% if schedule %}<span class="mono">{{ schedule.cron }}</span>{% elif job.category_schedule_id %}category schedule #{{ job.category_schedule_id }}{% else %}—{% endif %}</dd>
+      <dt>Attempt <span class="subid">reclaim count</span></dt><dd>{{ job.attempt }}</dd>
+      <dt>Queued</dt><dd>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') if job.created_at else '—' }}</dd>
+      <dt>Result</dt><dd>{{ job.result_at.strftime('%Y-%m-%d %H:%M:%S') if job.result_at else '—' }}</dd>
+      <dt>Worker</dt><dd class="mono">{{ job.node_id or '—' }}</dd>
+      <dt>Run id <span class="subid">job_id</span></dt><dd class="mono" style="word-break:break-all">{{ job.job_id }}</dd>
+      <dt>Stream msg <span class="subid">msg_id</span></dt><dd class="mono">{{ job.msg_id or '—' }}</dd>
+    </div>
+  </div>
+</div>
+{% endblock %}

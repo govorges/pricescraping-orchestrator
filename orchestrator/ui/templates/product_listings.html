@@ -6,7 +6,7 @@
 <p class="pagelead">
   Every distinct listing found for this product, one row each — price and activity followed across
   runs.
-  {{ hint("Identity is the listing URL with session/tracking args stripped. A listing missing from its vendor's latest clean run is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it, since they prove nothing about what's still listed. Hiding only affects this page; it does not touch stored metrics.") }}
+  {{ hint("Identity is the listing URL with session/tracking args stripped. A listing missing from its vendor's last two clean runs is marked ended — it has probably sold or the auction closed. One miss isn't enough, since search results shuffle between runs. Runs that errored or hit a challenge page don't count against it, since they prove nothing about what's still listed. Hiding only affects this page; it does not touch stored metrics.") }}
 </p>
 
 <form class="toolbar" method="get" action="{{ url_for('products.listings', qid=q.id) }}">

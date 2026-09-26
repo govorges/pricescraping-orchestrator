@@ -27,27 +27,6 @@
   {% endif %}
 </div>
 
-<div class="panel" id="deadletter">
-  <header>
-    <h2>Dead-letter</h2>
-    <span class="sub">jobs a worker permanently gave up on {{ hint("Malformed payload, or exceeded MAX_ATTEMPTS reclaim cycles without ever delivering a result. The matching job row is marked 'dead'.") }}</span>
-    <span class="right"><span class="pill {{ 'pill--crit' if deadletter else '' }}">{{ deadletter | length }} entr{{ 'y' if deadletter | length == 1 else 'ies' }}</span></span>
-  </header>
-  <div class="table-wrap"><table>
-    <thead><tr><th>Stream ID</th><th>Job</th><th>Reason</th></tr></thead>
-    <tbody>
-      {% for d in deadletter %}
-      <tr>
-        <td class="mono">{{ d.id }}</td>
-        <td class="mono">{% if d.job_id %}<a href="{{ url_for('ui.job_detail', job_id=d.job_id) }}">{{ d.job_id[:8] }}</a>{% else %}—{% endif %}</td>
-        <td>{{ d.reason }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="3" class="muted">empty — nothing has been dead-lettered</td></tr>
-      {% endfor %}
-    </tbody>
-  </table></div>
-</div>
 {% endblock %}
 
 {% block slideovers %}

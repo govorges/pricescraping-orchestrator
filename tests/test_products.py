@@ -115,3 +115,22 @@ def test_old_query_pages_redirect(client):
     assert r.status_code == 301
     assert "/products/gpu-rtx-5090/listings?" in r.headers["Location"]
     assert "status=active" in r.headers["Location"] and "show=hidden" in r.headers["Location"]
+
+
+def test_deleting_a_product_deletes_its_schedules(client):
+    """The product's own schedules go with it (SQLite ignores the FK cascade), while category schedules stay."""
+    _seed()
+    r = client.post("/queries/gpu-rtx-5090/delete")
+    assert r.headers["Location"].endswith("/products")
+    with session_scope() as db:
+        assert db.get(QueryObject, "gpu-rtx-5090") is None
+        assert db.query(Schedule).count() == 0
+        assert db.query(CategorySchedule).count() == 1
+
+
+def test_api_delete_also_deletes_the_products_schedules(client):
+    """DELETE /api/v1/query-objects/<id> removes its schedules the same way the dashboard does."""
+    _seed()
+    assert client.delete("/api/v1/query-objects/gpu-rtx-5090").status_code == 204
+    with session_scope() as db:
+        assert db.query(Schedule).filter_by(query_object_id="gpu-rtx-5090").count() == 0

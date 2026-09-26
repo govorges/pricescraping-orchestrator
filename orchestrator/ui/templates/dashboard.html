@@ -40,7 +40,7 @@
       <p class="legend" style="margin-top:8px"><span><i style="background:var(--accent)"></i>observed median price</span></p>
     </div>
     <div class="panel">
-      <header><h2>Recent jobs</h2><span class="right"><a href="{{ url_for('ui.jobs') }}">All jobs →</a></span></header>
+      <header><h2>Recent runs</h2><span class="right"><a href="{{ url_for('ui.runs') }}">All runs →</a></span></header>
       {% include "partials/job_feed.html" %}
     </div>
   </div>
@@ -84,7 +84,7 @@
     <div class="alert {{ 'crit' if a.level == 'crit' }}">
       <svg viewBox="0 0 24 24"><path d="M12 9v4m0 4h.01M10.3 3.9 2 18a2 2 0 0 0 1.7 3h16.6A2 2 0 0 0 22 18L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
       <p>{{ a.text }}</p>
-      {% if a.href %}<a class="btn ghost sm" href="{{ url_for('ui.' + a.href) }}">Review</a>{% else %}<span></span>{% endif %}
+      {% if a.href %}<a class="btn ghost sm" href="{{ url_for('ui.' + a.href, **(a.args or {})) }}">Review</a>{% else %}<span></span>{% endif %}
     </div>
     {% else %}
     <div class="ok-note">All clear — workers healthy, queue draining, no dead-letter.</div>
@@ -135,10 +135,10 @@ document.addEventListener("DOMContentLoaded", function () {
         : "median across " + (sel.options[sel.selectedIndex].textContent.replace(" (category)", ""));
       series = [{ name: label, points: xs.map(function (k) { return median(byDay[k]); }) }];
     } else {
-      var rows = current.filter(function (r) { return r.query_object_id === qo; });
-      xs = rows.map(function (r) { return r.observed_at; });
-      series = [{ name: QO_NAMES[qo] || qo,
-        points: rows.map(function (r) { return r.price_median; }) }];
+      var byVendor = window.seriesByVendor(
+        current.filter(function (r) { return r.query_object_id === qo; }), "price_median");
+      xs = byVendor.xs;
+      series = byVendor.series;
     }
     if (!series.length || !series[0].points.length) { svg.hidden = true; empty.hidden = false; return; }
     var labels = xs.length > 5

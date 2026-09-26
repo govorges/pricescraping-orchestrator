@@ -1,5 +1,6 @@
-"""A listing is marked 'ended / sold' when it's missing from its vendor's most
-recent *trustworthy* scrape run. A run that errored — including a blocked or
+"""A listing is marked 'ended / sold' when it's missing from its vendor's two
+most recent *trustworthy* scrape runs (one miss isn't enough -- search results
+shuffle between runs). A run that errored — including a blocked or
 challenge-page scrape that came back with zero listings — proves nothing about
 what's still listed, so it must never be held against a listing's absence.
 """
@@ -69,8 +70,8 @@ def test_multiple_error_runs_still_dont_mark_it_ended(db_session):
     assert tracked.active is True
 
 
-def test_clean_run_without_the_listing_marks_it_ended(db_session):
-    """A genuinely clean ('ok') run that doesn't include the listing is real evidence it ended/sold."""
+def test_one_clean_miss_is_not_enough_to_mark_it_ended(db_session):
+    """Missing from a single clean run is common while a listing is still for sale -- it stays active."""
     now = datetime.now(timezone.utc)
     last_ok = now - timedelta(days=2)
 
@@ -82,8 +83,26 @@ def test_clean_run_without_the_listing_marks_it_ended(db_session):
     runs = _run_times_by_vendor(db_session, QID)
     _annotate_activity([tracked], runs)
 
-    assert tracked.active is False
+    assert tracked.active is True
     assert tracked.runs_missed == 1
+
+
+def test_two_clean_runs_without_the_listing_mark_it_ended(db_session):
+    """Two clean ('ok') runs in a row that don't include the listing are real evidence it ended/sold."""
+    now = datetime.now(timezone.utc)
+    last_ok = now - timedelta(days=2)
+
+    tracked = _tracked(db_session, canonical_url="https://x/1", last_seen_at=last_ok)
+    _obs(db_session, observed_at=last_ok, status="ok", job_id="j0")
+    _obs(db_session, observed_at=now - timedelta(days=1), status="ok", job_id="j1")
+    _obs(db_session, observed_at=now, status="ok", job_id="j2")
+    db_session.flush()
+
+    runs = _run_times_by_vendor(db_session, QID)
+    _annotate_activity([tracked], runs)
+
+    assert tracked.active is False
+    assert tracked.runs_missed == 2
 
 
 def test_partial_run_is_still_a_trustworthy_run(db_session):
@@ -94,7 +113,8 @@ def test_partial_run_is_still_a_trustworthy_run(db_session):
 
     tracked = _tracked(db_session, canonical_url="https://x/1", last_seen_at=last_ok)
     _obs(db_session, observed_at=last_ok, status="ok", job_id="j0")
-    _obs(db_session, observed_at=now, status="partial", job_id="j1")
+    _obs(db_session, observed_at=now - timedelta(days=1), status="partial", job_id="j1")
+    _obs(db_session, observed_at=now, status="partial", job_id="j2")
     db_session.flush()
 
     runs = _run_times_by_vendor(db_session, QID)

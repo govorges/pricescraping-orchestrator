@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from orchestrator import get_db
 from orchestrator.models import Category, QueryObject
+from orchestrator.api.schedules import _sync_scheduler
 from orchestrator.schemas import QueryObject as QueryObjectSchema
 
 bp = Blueprint("queries", __name__, url_prefix="/api/v1/query-objects")
@@ -121,6 +122,7 @@ def delete_query(qid: str):
     q = db.get(QueryObject, qid)
     if q is None:
         return jsonify({"error": "not found"}), 404
-    db.delete(q)
+    db.delete(q)  # its schedules go with it (QueryObject.schedules cascade)
     db.commit()
+    _sync_scheduler()
     return "", 204

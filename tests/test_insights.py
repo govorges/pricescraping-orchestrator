@@ -185,3 +185,36 @@ def test_export_category_observations_json(client):
 def test_export_category_unknown_404s(client):
     """Exporting an unknown category id 404s instead of silently returning an empty file."""
     assert client.get("/insights/category/nope/export.csv").status_code == 404
+
+
+def test_price_summary_does_not_mix_vendors():
+    """Two vendors at very different price levels: the current price is the median of each vendor's latest,
+    and the change averages each vendor's own move (-10% and +10%) instead of comparing one vendor with the other."""
+    from orchestrator.ui.insights import price_summary
+
+    now = datetime.now(timezone.utc)
+    points = [
+        (now - timedelta(days=10), 200.0, "usa_ebay"),
+        (now - timedelta(days=10), 600.0, "usa_newegg"),
+        (now - timedelta(hours=2), 660.0, "usa_newegg"),
+        (now - timedelta(hours=1), 180.0, "usa_ebay"),
+    ]
+    s = price_summary(points, now)
+    assert s["current"] == 420.0  # median of 180 and 660
+    assert s["change_7d"] == 0.0  # (-10% + 10%) / 2 -- mixed, it read as -70% (600 -> 180)
+    assert s["volatility"] == 20.0  # std dev 10 at eBay, 30 at Newegg, averaged
+
+
+def test_price_summary_skips_stale_vendors_and_single_runs():
+    """A vendor not scraped for over 30 days is left out of the current price, and a product whose
+    vendors each have one run has a price but no change yet."""
+    from orchestrator.ui.insights import price_summary
+
+    now = datetime.now(timezone.utc)
+    s = price_summary([
+        (now - timedelta(days=90), 900.0, "old_vendor"),
+        (now - timedelta(hours=1), 300.0, "usa_ebay"),
+    ], now)
+    assert s["current"] == 300.0
+    assert s["vendors_in_current"] == 1
+    assert s["change_7d"] is None

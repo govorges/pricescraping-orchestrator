@@ -56,10 +56,11 @@
     </div>
 
     <form class="panel" method="post" action="{{ url_for('ui.delete_query', qid=q.id) }}"
-          onsubmit="return confirm('Delete product {{ q.id }}? Schedules that use it will break.')">
+          onsubmit="return confirm('Delete product {{ q.id }}{% if schedules %} and its {{ schedules | length }} schedule(s){% endif %}?')">
       <header><h2>Delete product</h2></header>
       <p class="help" style="margin-bottom:10px">
-        Past listings and price history stay in the database. Delete this product's schedules first — they can't run without it.
+        Its own schedules are deleted with it{% if category_schedules %}; category schedules stay and simply skip it{% endif %}.
+        Past listings and price history stay in the database.
       </p>
       <button type="submit" class="btn danger">Delete</button>
     </form>

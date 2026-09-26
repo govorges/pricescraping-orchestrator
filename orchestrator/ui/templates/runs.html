@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% from "_macros.html" import job_table, sort_select, hint %}
-{% block title %}Jobs{% endblock %}
+{% block title %}Runs{% endblock %}
 {% block body %}
-<h1>Jobs</h1>
+<p class="pagelead">
+  Each run is one scrape of one product at one vendor. Open a run to see what it found, what it
+  dropped and what changed since the run before it.
+</p>
 
 <details class="panel">
   <summary>What the statuses mean</summary>
@@ -34,13 +37,37 @@
 </details>
 
 <div class="tabs">
-  <a href="{{ url_for('ui.jobs') }}" class="{{ 'active' if not args.get('status') }}">all</a>
+  <a href="{{ url_for('ui.runs') }}" class="{{ 'active' if not args.get('status') }}">all</a>
   {% for s in ['queued', 'ok', 'partial', 'error', 'dead', 'canceled'] %}
-    <a href="{{ url_for('ui.jobs', status=s) }}" class="{{ 'active' if args.get('status') == s }}">{{ s }} ({{ counts.get(s, 0) }})</a>
+    <a href="{{ url_for('ui.runs', status=s) }}" class="{{ 'active' if args.get('status') == s }}">{{ 'dead-letter' if s == 'dead' else s }} ({{ counts.get(s, 0) }})</a>
   {% endfor %}
 </div>
 
-<form class="toolbar" method="get" action="{{ url_for('ui.jobs') }}">
+{% if args.get('status') == 'dead' %}
+<div class="panel" id="deadletter" style="margin-bottom:16px">
+  <header>
+    <h2>Dead-letter stream</h2>
+    <span class="sub">why a worker gave up on each run {{ hint("Malformed payload, or exceeded MAX_ATTEMPTS reclaim cycles without ever delivering a result. The matching run is marked 'dead'.") }}</span>
+    <span class="right"><span class="pill {{ 'pill--crit' if deadletter else '' }}">{{ deadletter | length }} entr{{ 'y' if deadletter | length == 1 else 'ies' }}</span></span>
+  </header>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Stream ID</th><th>Run</th><th>Reason</th></tr></thead>
+    <tbody>
+      {% for d in deadletter %}
+      <tr>
+        <td class="mono">{{ d.id }}</td>
+        <td class="mono">{% if d.job_id %}<a href="{{ url_for('ui.run_detail', job_id=d.job_id) }}">{{ d.job_id[:8] }}</a>{% else %}—{% endif %}</td>
+        <td>{{ d.reason }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">empty — nothing has been dead-lettered</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<form class="toolbar" method="get" action="{{ url_for('ui.runs') }}">
   {% if args.get('status') %}<input type="hidden" name="status" value="{{ args.get('status') }}">{% endif %}
   <label>Vendor
     <select name="vendor_id" onchange="this.form.submit()">
@@ -48,16 +75,16 @@
       {% for v in vendors %}<option value="{{ v.identifier }}" {{ 'selected' if args.get('vendor_id') == v.identifier }}>{{ v.name or v.identifier }} ({{ v.identifier }})</option>{% endfor %}
     </select>
   </label>
-  <label>Query name
+  <label>Product
     <span class="search">
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4-4"/></svg>
-      <input type="text" name="q" value="{{ args.get('q', '') }}" placeholder="e.g. RTX 5090" aria-label="Filter by query name">
+      <input type="text" name="q" value="{{ args.get('q', '') }}" placeholder="e.g. RTX 5090" aria-label="Filter by product name">
     </span>
   </label>
   {{ sort_select(args.get('sort', ''), auto=True) }}
   <button type="button" class="btn danger toolbar-end"
-          onclick="if (confirm('Purge every queued job from the stream and mark those rows canceled?\\n\\nRunning/finished jobs are untouched. Workers already mid-scrape will still deliver their result.')) { document.getElementById('purge-form').submit(); }">
-    Purge queue {{ hint("XDELs all undelivered entries from scrape.jobs and marks queued/running job rows canceled. Use this to clear a backlog you enqueued by mistake or that no worker will ever process.") }}
+          onclick="if (confirm('Purge every queued run from the stream and mark those runs canceled?\\n\\nRunning/finished runs are untouched. Workers already mid-scrape will still deliver their result.')) { document.getElementById('purge-form').submit(); }">
+    Purge queue {{ hint("XDELs all undelivered entries from scrape.jobs and marks queued/running runs canceled. Use this to clear a backlog you enqueued by mistake or that no worker will ever process.") }}
   </button>
 </form>
 <form id="purge-form" method="post" action="{{ url_for('ui.purge_queue_view') }}" hidden></form>

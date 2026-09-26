@@ -210,9 +210,10 @@ Every provisioned worker inherits `Settings.worker_base_env()` — `REDIS_URL`,
 
 **Dashboard (HTML, HTMX-polled):** `/` · `/products` · `/products/<id>` (Overview)
 · `/products/<id>/listings` · `/products/<id>/settings` · `/tracked` · `/tracked/<id>` ·
-`/cost-per-frame` · `/vendors` · `/categories` · `/schedules` · `/jobs` · `/jobs/<id>` ·
-`/nodes` · `/database`. The old `/queries`, `/queries/<id>/listings`, `/insights` and
-`/insights/<id>` pages permanently redirect to their `/products` equivalents.
+`/cost-per-frame` · `/vendors` · `/categories` · `/schedules` · `/runs` (`?status=dead` shows
+the dead-letter stream) · `/runs/<id>` · `/nodes` · `/database`. The old `/queries`,
+`/queries/<id>/listings`, `/insights`, `/insights/<id>`, `/jobs` and `/jobs/<id>` pages
+permanently redirect to their new equivalents.
 
 **JSON API (`/api/v1`):**
 

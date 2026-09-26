@@ -24,9 +24,66 @@ bp = Blueprint("insights", __name__, template_folder="templates")
 
 # ---- shared data ----------------------------------------------------------
 
+# A vendor whose newest observation is this much older than the product's
+# newest one has probably stopped being scraped; its last price no longer
+# says anything about the product now.
+STALE_VENDOR_DAYS = 30
+
+
+def price_summary(points, now: datetime | None = None) -> dict:
+    """Product-level price figures from ``(observed_at, median, vendor_id)``
+    points, oldest first, without mixing vendors.
+
+    Vendors price the same product differently (eBay used vs. Newegg new), so
+    one series through every vendor's runs would swing with whichever vendor
+    ran last. Each figure is built per vendor and then combined:
+
+    - ``current``: median of each vendor's latest median (stale vendors left out);
+    - ``change_7d`` / ``change_30d``: each vendor's % change against its own
+      earlier price, averaged -- a vendor with a single run has no change yet;
+    - ``volatility``: each vendor's standard deviation of its medians, averaged;
+    - ``spark``: the last 14 medians of the vendor with the most runs.
+    """
+    now = now or datetime.now(timezone.utc)
+    by_vendor: dict[str, list[tuple[datetime, float]]] = {}
+    for at, median, vendor in points:
+        if median is not None:
+            by_vendor.setdefault(vendor, []).append((_as_utc(at), median))
+    if not by_vendor:
+        return {"current": None, "change_7d": None, "change_30d": None,
+                "volatility": None, "spark": [], "vendors_in_current": 0}
+
+    newest = max(series[-1][0] for series in by_vendor.values())
+    fresh = [series for series in by_vendor.values()
+             if newest - series[-1][0] <= timedelta(days=STALE_VENDOR_DAYS)]
+
+    def change_over(days: int) -> float | None:
+        cutoff = now - timedelta(days=days)
+        pcts = []
+        for series in fresh:
+            if len(series) < 2:
+                continue
+            past = [m for at, m in series if at <= cutoff]
+            base = past[-1] if past else series[0][1]
+            if base:
+                pcts.append((series[-1][1] - base) / base * 100)
+        return round(statistics.mean(pcts), 1) if pcts else None
+
+    spreads = [statistics.pstdev([m for _, m in series]) for series in fresh if len(series) > 1]
+    busiest = max(by_vendor.values(), key=len)
+    return {
+        "current": round(statistics.median(series[-1][1] for series in fresh), 2),
+        "change_7d": change_over(7),
+        "change_30d": change_over(30),
+        "volatility": round(statistics.mean(spreads), 2) if spreads else None,
+        "spark": [m for _, m in busiest[-14:]],
+        "vendors_in_current": len(fresh),
+    }
+
 
 def _leaderboard(db, category_id: str | None = None) -> list[dict]:
-    """One summary row per query object: latest price, 7-day change, reach.
+    """One summary row per query object: current price, 7-day change, reach
+(see :func:`price_summary` for how vendors are combined).
 
     Two queries total regardless of how many query objects exist -- every
     observation needed is pulled in one pass and reduced in Python, rather
@@ -55,27 +112,24 @@ def _leaderboard(db, category_id: str | None = None) -> list[dict]:
         by_qid.setdefault(qid, []).append((_as_utc(at), median, vendor))
 
     active_counts = _active_listing_counts(db)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    now = datetime.now(timezone.utc)
 
     rows = []
     for q in queries:
         series = by_qid.get(q.id, [])
-        latest = series[-1][1] if series else None
-        past = [m for at, m, _ in series if at <= cutoff]
-        base = past[-1] if past else (series[0][1] if series else None)
-        change = round((latest - base) / base * 100, 1) if latest is not None and base else None
+        summary = price_summary(series, now)
         rows.append(
             {
                 "id": q.id,
                 "content": q.content or q.id,
                 "category_id": q.category_id,
                 "category": (q.category.name or q.category.id) if q.category else None,
-                "latest_price": latest,
-                "change_pct": change,
+                "latest_price": summary["current"],
+                "change_pct": summary["change_7d"],
                 "observations": len(series),
                 "vendors": len({v for *_, v in series}),
                 "active_listings": active_counts.get(q.id, 0),
-                "spark": [m for _, m, _ in series[-14:]],
+                "spark": summary["spark"],
             }
         )
     return rows
@@ -138,19 +192,7 @@ def _query_insights(db, q: QueryObject) -> dict:
         .where(PriceObservation.query_object_id == q.id)
         .order_by(PriceObservation.observed_at.asc())
     ).all()
-    medians = [(_as_utc(r.observed_at), r.price_median) for r in history if r.price_median is not None]
-    now = datetime.now(timezone.utc)
-
-    def change_over(days: int) -> float | None:
-        if not medians:
-            return None
-        cutoff = now - timedelta(days=days)
-        past = [m for at, m in medians if at <= cutoff]
-        base = past[-1] if past else medians[0][1]
-        latest = medians[-1][1]
-        return round((latest - base) / base * 100, 1) if base else None
-
-    values = [m for _, m in medians]
+    summary = price_summary((r.observed_at, r.price_median, r.vendor_id) for r in history)
     total_tracked = (
         db.scalar(
             select(func.count()).select_from(TrackedListing).where(TrackedListing.query_object_id == q.id)
@@ -162,9 +204,11 @@ def _query_insights(db, q: QueryObject) -> dict:
         "stats": stats,
         "history_json": [_obs_dict(o) for o in history],
         "history_rows": list(reversed(history))[:50],
-        "change_7d": change_over(7),
-        "change_30d": change_over(30),
-        "volatility": round(statistics.pstdev(values), 2) if len(values) > 1 else None,
+        "current_median": summary["current"],
+        "vendors_in_current": summary["vendors_in_current"],
+        "change_7d": summary["change_7d"],
+        "change_30d": summary["change_30d"],
+        "volatility": summary["volatility"],
         "active_listings": _active_listing_counts(db).get(q.id, 0),
         "total_tracked": total_tracked,
         "listing_types": _listing_type_breakdown(db, q.id),

@@ -66,7 +66,7 @@
           {%- elif idx == 0 -%}first seen
           {%- else -%}no change{%- endif -%}
         </span>
-        {% if p.job_id %}<a class="obs-job mono" href="{{ url_for('ui.job_detail', job_id=p.job_id) }}">{{ p.job_id[:8] }}</a>{% else %}<span></span>{% endif %}
+        {% if p.job_id %}<a class="obs-job mono" href="{{ url_for('ui.run_detail', job_id=p.job_id) }}">{{ p.job_id[:8] }}</a>{% else %}<span></span>{% endif %}
         {% if title_changed %}<span class="obs-titlechange">↳ retitled “{{ p.title }}”</span>{% endif %}
       </li>
     {% else %}

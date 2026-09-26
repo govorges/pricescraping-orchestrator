@@ -94,6 +94,12 @@ class QueryObject(Base):
     )
 
     category: Mapped[Category | None] = relationship(back_populates="queries", lazy="joined")
+    # Deleted with the query object by the ORM rather than left to the FK's
+    # ON DELETE CASCADE, which SQLite ignores unless foreign keys are switched
+    # on -- a schedule for a missing query object can never run.
+    schedules: Mapped[list[Schedule]] = relationship(
+        back_populates="query_object", cascade="all, delete-orphan"
+    )
 
     def effective_exclude(self) -> list[str]:
         own = list(self.exclude or [])
@@ -155,7 +161,7 @@ class Schedule(Base):
     )
 
     vendor: Mapped[Vendor] = relationship(lazy="joined")
-    query_object: Mapped[QueryObject] = relationship(lazy="joined")
+    query_object: Mapped[QueryObject] = relationship(back_populates="schedules", lazy="joined")
 
 
 class CategorySchedule(Base):

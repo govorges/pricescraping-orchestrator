@@ -5,7 +5,7 @@
 {% block body %}
 <p class="pagelead">
   Every listing across all products, one row per real-world listing, recognised across scrapes by its URL with session/tracking args stripped.
-  {{ hint("A listing missing from its vendor's latest clean run for that query is marked ended — it has probably sold or the auction closed. Runs that errored or hit a challenge page don't count against it.") }}
+  {{ hint("A listing missing from its vendor's last two clean runs for that query is marked ended — it has probably sold or the auction closed. One miss isn't enough, since search results shuffle between runs. Runs that errored or hit a challenge page don't count against it.") }}
 </p>
 
 <form class="toolbar" method="get" action="{{ url_for('ui.tracked_listings') }}">
