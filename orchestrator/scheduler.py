@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from orchestrator.autoscale import desired_replicas
+from orchestrator.bands import band_for
 from orchestrator.db import session_scope
 from orchestrator.jobs import build_job
 from orchestrator.logging import get_logger
@@ -55,6 +56,7 @@ def enqueue_for_schedule(db: Session, schedule: Schedule, *, scheduled_by: str) 
         schedule.query_object,
         options=schedule.options or {},
         scheduled_by=scheduled_by,
+        band=band_for(db, schedule.query_object, schedule.vendor_id),
     )
     msg_id = enqueue(payload, settings=settings)
 
@@ -107,7 +109,8 @@ def enqueue_for_category_schedule(
     now = datetime.now(timezone.utc)
     for vendor in vendors:
         for query in queries:
-            payload = build_job(vendor, query, options=cs.options or {}, scheduled_by=scheduled_by)
+            payload = build_job(vendor, query, options=cs.options or {}, scheduled_by=scheduled_by,
+                                band=band_for(db, query, vendor.identifier))
             msg_id = enqueue(payload, settings=settings)
             db.add(
                 Job(

@@ -11,7 +11,7 @@
     {% if q.category %}<span>/</span><a href="{{ url_for('products.products_list', category_id=q.category_id) }}">{{ q.category.name or q.category.id }}</a>{% endif %}
   </nav>
   <span class="mono">{{ q.id }}</span>
-  <span class="muted">band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}</span>
+  <span class="muted">{% if q.dynamic_band %}band follows each vendor's median{% else %}band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}{% endif %}</span>
   {% if product.schedules_enabled %}
     <span class="pill pill--ok"><i class="dot"></i>scheduled · {{ product.schedules_enabled }}</span>
   {% else %}

@@ -21,6 +21,7 @@ _FIELDS = (
     "exclude_settings",
     "minimum_value",
     "maximum_value",
+    "dynamic_band",
 )
 
 
@@ -35,6 +36,7 @@ def query_dict(q: QueryObject) -> dict:
         "exclude_settings": q.exclude_settings,
         "minimum_value": q.minimum_value,
         "maximum_value": q.maximum_value,
+        "dynamic_band": bool(q.dynamic_band),
         "category_id": q.category_id,
         "effective_exclude": q.effective_exclude(),
         "effective_minimum_value": lo,

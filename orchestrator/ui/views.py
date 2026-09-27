@@ -622,6 +622,7 @@ def _apply_query_form(q: QueryObject) -> None:
     q.minimum_value = _num("minimum_value") or 0.0
     q.maximum_value = _num("maximum_value")
     q.category_id = request.form.get("category_id") or None
+    q.dynamic_band = request.form.get("dynamic_band") == "on"
 
 
 @bp.post("/queries")

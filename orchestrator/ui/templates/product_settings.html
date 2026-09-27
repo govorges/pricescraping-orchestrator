@@ -18,6 +18,29 @@
   <div class="stack">
     <div class="panel">
       <header>
+        <h2>Price band in use</h2>
+        <span class="sub">{{ "dynamic · follows each vendor's median" if q.dynamic_band else 'fixed' }}</span>
+      </header>
+      <table>
+        <thead><tr><th>Vendor</th><th class="num">Minimum</th><th class="num">Maximum</th><th>From</th></tr></thead>
+        <tbody>
+        {% for b in band_rows %}
+          <tr>
+            <td>{{ vendor_tip(b.vendor_id, vmap) }}</td>
+            <td class="num tnum">${{ '{:,.0f}'.format(b.lo) }}</td>
+            <td class="num tnum">{% if b.hi is not none %}${{ '{:,.0f}'.format(b.hi) }}{% else %}no cap{% endif %}</td>
+            <td class="muted">{% if b.dynamic %}median ${{ '{:,.0f}'.format(b.reference) }} of the last {{ dynamic_band_rule.runs }} runs
+              {%- elif q.dynamic_band %}fixed band — needs {{ dynamic_band_rule.min_runs }} runs first{% else %}fixed band{% endif %}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="muted">No vendor has run this product yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <header>
         <h2>Schedules</h2>
         <span class="sub">what runs this product</span>
         <div class="right"><a class="btn ghost sm" href="{{ url_for('ui.schedules') }}">Add schedule</a></div>

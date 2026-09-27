@@ -52,7 +52,7 @@
         <span class="mono">{{ r.id }}</span>
         {% if r.category %}<span class="tag tag--cat">{{ r.category }}</span>{% endif %}
       </div>
-      <div class="sub">band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}
+      <div class="sub">{% if q.dynamic_band %}dynamic band{% else %}band ${{ lo | round | int }}–{{ ('$' ~ (hi | round | int)) if hi is not none else '∞' }}{% endif %}
         · {{ r.observations }} run{{ 's' if r.observations != 1 }}{% if r.vendors > 1 %} · {{ r.vendors }} vendors{% endif %}</div>
     </div>
     <span class="qspark{{ ' flat' if r.spark | length < 2 }}" data-spark="{{ r.spark | join(',') }}"></span>

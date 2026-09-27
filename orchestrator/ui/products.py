@@ -23,6 +23,7 @@ from orchestrator.models import (
     Schedule,
     TrackedListing,
 )
+from orchestrator.bands import bands_by_vendor
 from orchestrator.ui.insights import _leaderboard, _query_insights
 from orchestrator.ui.views import (
     TRACKED_LISTING_SORTS,
@@ -205,8 +206,15 @@ def settings(qid: str):
     db = get_db()
     q = _product_or_404(db, qid)
     direct, via_category = _schedules_for(db, q)
+    vendor_ids = sorted(
+        {s.vendor_id for s in direct}
+        | {vid for (vid,) in db.execute(
+            select(PriceObservation.vendor_id).where(PriceObservation.query_object_id == q.id).distinct()
+        ).all()}
+    )
     return render_template(
         "product_settings.html",
+        band_rows=bands_by_vendor(db, q, vendor_ids),
         **_frame(db, q, "settings"),
         categories=db.scalars(select(Category).order_by(Category.id)).all(),
         stats=_query_price_stats(db, q.id),

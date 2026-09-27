@@ -85,6 +85,9 @@ class QueryObject(Base):
     exclude_settings: Mapped[dict] = mapped_column(JSON, default=dict)
     minimum_value: Mapped[float] = mapped_column(Float, default=0.0)
     maximum_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # When on, each job's MinimumValue/MaximumValue follow that vendor's recent
+    # median price instead of the fixed values above -- see orchestrator.bands.
+    dynamic_band: Mapped[bool] = mapped_column(Boolean, default=False)
     category_id: Mapped[str | None] = mapped_column(
         ForeignKey("category.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -120,10 +123,11 @@ class QueryObject(Base):
                     else self.category.maximum_value_ceiling
         return lo, hi
 
-    def snapshot(self) -> dict:
+    def snapshot(self, band: tuple[float, float | None] | None = None) -> dict:
         """The ``query_object`` block for a job payload — category exclude
-        phrases and price-band guard rails already merged in."""
-        lo, hi = self.effective_band()
+        phrases and price-band guard rails already merged in. ``band``
+        overrides the price band (a dynamic band worked out per vendor)."""
+        lo, hi = band if band is not None else self.effective_band()
         out: dict = {
             "id": self.id,
             "Content": self.content,

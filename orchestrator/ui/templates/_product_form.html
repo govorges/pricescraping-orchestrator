@@ -54,7 +54,13 @@
       </div>
 
       <div class="field">
-        <label>Price band</label>
+        <label class="check-label"><input type="checkbox" name="dynamic_band" {{ 'checked' if edit and q.dynamic_band }}> Dynamic price band</label>
+        <span class="help">Each vendor's band follows its own recent median price: minimum {{ dynamic_band_rule.min_pct }}% of it,
+          maximum {{ dynamic_band_rule.max_x }}×. Until a vendor has {{ dynamic_band_rule.min_runs }} runs, the fixed band below is used.</span>
+      </div>
+
+      <div class="field">
+        <label>{{ 'Fixed price band' if edit and q.dynamic_band else 'Price band' }}</label>
         <div class="band" data-scale-max="{{ smax }}"
              data-min="{{ q.minimum_value or 0 if edit else 0 }}"
              data-max="{{ (q.maximum_value if q.maximum_value is not none else '') if edit else '' }}">

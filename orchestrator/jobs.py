@@ -31,8 +31,12 @@ def build_job(
     options: dict[str, Any] | None = None,
     scheduled_by: str = "",
     job_id: str | None = None,
+    band: tuple[float, float | None] | None = None,
 ) -> dict[str, Any]:
-    """Return a validated job payload dict ready for :func:`orchestrator.queue.enqueue`."""
+    """Return a validated job payload dict ready for :func:`orchestrator.queue.enqueue`.
+
+    ``band`` overrides the query object's price band -- the scheduler passes
+    the dynamic band for this vendor (:func:`orchestrator.bands.band_for`)."""
     opts = {k: v for k, v in (options or {}).items() if k in _OPTION_KEYS and v is not None}
     payload: dict[str, Any] = {
         "job_id": job_id or str(uuid.uuid4()),
@@ -40,7 +44,7 @@ def build_job(
         "scheduled_by": scheduled_by,
         "attempt": 1,
         "vendor": vendor.snapshot(),
-        "query_object": query_object.snapshot(),
+        "query_object": query_object.snapshot(band=band),
         "options": opts,
     }
     # fail fast on a malformed payload, just like scripts/seed_job.py
