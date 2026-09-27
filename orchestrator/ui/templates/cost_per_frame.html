@@ -99,7 +99,11 @@
          data-cpf="{{ '%.2f' % r.cost_per_frame }}"
          data-msrp="{{ '%.2f' % r.msrp_cost_per_frame if r.msrp_cost_per_frame is not none else '' }}"
          data-seen="{{ r.observed_at | reltime if r.observed_at else '' }}{{ ' (latest run had no usable price)' if r.from_older_run }}">
-      <span class="cpf-label" title="{{ r.query }}">{{ r.gpu }}</span>
+      <span class="cpf-label" title="{{ r.query }}">
+        <span class="cpf-name">{{ r.gpu }}</span>
+        <span class="cpf-price tnum">${{ '{:,.0f}'.format(r.price) if r.price == r.price | round else '{:,.2f}'.format(r.price) }}
+          {%- if r.from_older_run %} <span class="cpf-older" title="The newest run for this GPU here had no usable price, so this comes from the run before it.">· older run</span>{% endif %}</span>
+      </span>
       {% set cw = (r.cost_per_frame / max_cpf * 100) | round(2) if max_cpf else 0 %}
       {% set fw = (r.fps / max_fps * 100) | round(2) if max_fps else 0 %}
       <span class="cpf-track"><span class="cpf-scale">

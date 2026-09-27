@@ -716,7 +716,11 @@ table.selbuilder input, table.selbuilder select { width: 100%; }
   align-items: center; column-gap: 10px; row-gap: 3px; padding: 4px; border-radius: 4px; outline: none; }
 .cpf-row:hover, .cpf-row:focus-visible { background-color: var(--inset); }
 .cpf-row:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
-.cpf-label { grid-row: span 2; font-size: .74rem; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.cpf-label { grid-row: span 2; display: grid; justify-items: end; min-width: 0; font-size: .74rem; color: var(--ink-soft); text-align: right; }
+.cpf-name, .cpf-price { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the price the cost-per-frame bar is calculated from (median or low, per the Price basis picker) */
+.cpf-price { font-family: var(--mono); font-size: .66rem; color: var(--ink-muted); }
+.cpf-older { color: var(--warn); }
 .cpf-track { position: relative; height: 12px; border-left: 1px solid var(--rule-strong); }
 /* bars scale across the track minus room for the end label, so even the
    longest bar's value sits beside it instead of overflowing the panel */

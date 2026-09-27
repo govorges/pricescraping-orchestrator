@@ -203,6 +203,8 @@ def test_cost_per_frame_page_renders_and_exports(client, monkeypatch):
     assert "cpf-swatch brand-intel" not in html  # legend only lists brands on the chart
     assert "Radeon RX 6600" in html and "GeForce RTX 5090" in html
     assert "$7.50" in html  # 186 / 24.8
+    # the price each bar is calculated from sits under the GPU name
+    assert '<span class="cpf-price tnum">$186' in html and '<span class="cpf-price tnum">$2,509' in html
 
     rt = client.get(f"/cost-per-frame?vendor={VENDOR}&mode=rt&res=4k").get_data(as_text=True)
     assert "$60.00" in rt  # 186 / 3.1
